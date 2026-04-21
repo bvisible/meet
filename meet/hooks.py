@@ -1,11 +1,11 @@
 app_name = "meet"
-app_title = "Frappe Meet"
+app_title = "NeoMeet"
 app_publisher = "Frappe"
 app_description = "Video conferencing app built on Frappe Framework and Mediasoup"
 app_email = "suhail@frappe.io"
 app_license = "agpl-3.0"
 app_icon_url = "/assets/meet/frontend/meet_logo.png"
-app_icon_title = "Frappe Meet"
+app_icon_title = "NeoMeet"
 app_icon_route = "/meet"
 
 # Apps

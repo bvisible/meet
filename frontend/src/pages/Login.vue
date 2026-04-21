@@ -2,7 +2,7 @@
 	<div class="flex h-screen overflow-hidden mt-20 justify-center">
 		<div class="w-full max-w-sm mt-4 space-y-6">
 			<FrappeMeetingLogo class="h-10 w-auto" />
-			<h1 class="text-2xl font-bold leading-5 tracking-tight text-gray-900">Login to Frappe Meet</h1>
+			<h1 class="text-2xl font-bold leading-5 tracking-tight text-gray-900">Login to NeoMeet</h1>
 			<form class="flex flex-col space-y-4 w-full px-1" @submit.prevent="submit">
 				<FormControl
 					required

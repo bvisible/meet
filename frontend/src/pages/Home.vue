@@ -5,7 +5,7 @@
 				<div class="flex justify-center items-center gap-4 mb-6">
 					<FrappeMeetingLogo class="h-16 w-16" />
 				</div>
-				<h1 class="text-2xl font-bold text-gray-900 mb-4">Frappe Meet</h1>
+				<h1 class="text-2xl font-bold text-gray-900 mb-4">NeoMeet</h1>
 			</div>
 
 			<div class="space-y-6">

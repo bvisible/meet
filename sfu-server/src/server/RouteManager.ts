@@ -29,7 +29,7 @@ export class RouteManager {
 	setupRoutes(): void {
 		this.app.get('/', (_req: Request, res: Response) => {
 			res.json({
-				message: 'Frappe Meet SFU Server is running',
+				message: 'NeoMeet SFU Server is running',
 				version: RouteManager.version,
 				timestamp: new Date().toISOString(),
 			});
