@@ -378,6 +378,10 @@ export interface JWTPayload {
 	user_id: string;
 	user_name: string;
 	meeting_id: string;
+	// Optional tenant claim (Frappe site name). When present, the SFU
+	// isolates rooms per tenant by prefixing room IDs with `<tenant>:`.
+	// Absent for clients talking to a single-tenant SFU.
+	tenant?: string;
 	user_avatar?: string;
 	is_host: boolean;
 	is_cohost?: boolean;
@@ -406,7 +410,16 @@ declare module 'socket.io' {
 	interface Socket {
 		userId: string;
 		userName: string;
+		// `meetingId` is the effective room key used by mediasoup.
+		// When the JWT carries a `tenant`, it is prefixed:
+		// `<tenant>:<rawMeetingId>`. Otherwise it equals `rawMeetingId`.
 		meetingId: string;
+		// Raw meeting ID as sent by the client / stored in Frappe — used
+		// to validate token refresh and client-supplied roomIds.
+		rawMeetingId?: string;
+		// Tenant claim from the JWT. Empty string or undefined means
+		// single-tenant mode. Required to match on every token refresh.
+		tenant?: string;
 		isHost: boolean;
 		isCohost: boolean;
 		roomId?: string;

@@ -73,6 +73,7 @@ def get_sfu_connection_details(meeting_id: str) -> dict:
 	auth_payload = {
 		"user_id": frappe.session.user,
 		"meeting_id": meeting_id,
+		"tenant": frappe.local.site,
 		"user_name": user_fullname,
 		"user_avatar": user_avatar,
 		"is_host": is_host,
@@ -124,6 +125,7 @@ def join_meeting(meeting_id: str) -> dict:
 				lobby_payload = {
 					"user_id": frappe.session.user,
 					"meeting_id": meeting_id,
+					"tenant": frappe.local.site,
 					"user_name": user_fullname,
 					"user_avatar": user_avatar,
 					"is_host": False,
@@ -264,6 +266,7 @@ def refresh_sfu_token(meeting_id: str) -> dict:
 	auth_payload = {
 		"user_id": frappe.session.user,
 		"meeting_id": meeting_id,
+		"tenant": frappe.local.site,
 		"user_name": user_fullname,
 		"user_avatar": user_avatar,
 		"is_host": is_host,
@@ -304,6 +307,7 @@ def get_sfu_presence_preview_token(meeting_id: str) -> dict:
 	auth_payload = {
 		"user_id": frappe.session.user,
 		"meeting_id": meeting_id,
+		"tenant": frappe.local.site,
 		"scope": "presence-preview",
 		"session_id": session_id,
 		"exp": now + expiry_seconds,
@@ -379,6 +383,7 @@ def join_meeting_as_guest(meeting_id: str, guest_name: str, guest_id: str | None
 		"user_id": guest_id,
 		"user_name": guest_name_clean,
 		"meeting_id": meeting_id,
+		"tenant": frappe.local.site,
 		"is_host": False,
 		"is_guest": True,
 		"scope": "full",
@@ -460,6 +465,7 @@ def get_approved_guest_connection_details(meeting_id: str, guest_id: str) -> dic
 		"user_id": guest_id,
 		"user_name": guest_name,
 		"meeting_id": meeting_id,
+		"tenant": frappe.local.site,
 		"is_host": False,
 		"is_guest": True,
 		"scope": "full",

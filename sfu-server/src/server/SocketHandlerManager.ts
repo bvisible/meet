@@ -456,15 +456,22 @@ export class SocketHandlerManager {
 		socket: Socket,
 		data: { roomId: string; participantId: string; userData: UserData },
 	): Promise<void> {
-		const { roomId, participantId, userData } = data;
+		const { roomId: clientRoomId, participantId, userData } = data;
 
 		try {
-			// Validate that roomId matches the token's meeting_id
-			if (socket.meetingId && socket.meetingId !== roomId) {
+			// The client sends the raw meeting_id. Validate it against
+			// the token's raw meeting_id so a compromised client can't
+			// steer into another meeting.
+			if (socket.rawMeetingId && socket.rawMeetingId !== clientRoomId) {
 				throw new Error(
-					`Room ID mismatch: token has ${socket.meetingId}, trying to join ${roomId}`,
+					`Room ID mismatch: token has ${socket.rawMeetingId}, trying to join ${clientRoomId}`,
 				);
 			}
+
+			// The effective mediasoup room key is the tenant-prefixed
+			// meetingId computed by AuthManager. This guarantees rooms
+			// are isolated across Frappe sites sharing the same SFU.
+			const roomId = socket.meetingId || clientRoomId;
 
 			await this.mediasoup.createRoom(roomId, (roomId, participantIds) => {
 				this.emitToFullAccessParticipants(roomId, 'active_speaker', {
