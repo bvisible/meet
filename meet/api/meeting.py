@@ -11,7 +11,7 @@ import jwt
 from frappe import _
 from frappe.rate_limiter import rate_limit
 
-from meet.utils.sfu_config import get_sfu_config
+from meet.utils.sfu_config import get_sfu_config, get_tenant
 from meet.utils.user import (
 	get_guest_session,
 	get_user_info,
@@ -59,7 +59,7 @@ def get_sfu_connection_details(meeting_id: str) -> dict:
 	if not meeting.can_join(frappe.session.user):
 		frappe.throw(_("Access denied"), frappe.PermissionError)
 
-	from meet.utils.sfu_config import get_sfu_config
+	from meet.utils.sfu_config import get_sfu_config, get_tenant
 
 	sfu_config = get_sfu_config()
 
@@ -73,7 +73,7 @@ def get_sfu_connection_details(meeting_id: str) -> dict:
 	auth_payload = {
 		"user_id": frappe.session.user,
 		"meeting_id": meeting_id,
-		"tenant": frappe.local.site,
+		"tenant": get_tenant(),
 		"user_name": user_fullname,
 		"user_avatar": user_avatar,
 		"is_host": is_host,
@@ -125,7 +125,7 @@ def join_meeting(meeting_id: str) -> dict:
 				lobby_payload = {
 					"user_id": frappe.session.user,
 					"meeting_id": meeting_id,
-					"tenant": frappe.local.site,
+					"tenant": get_tenant(),
 					"user_name": user_fullname,
 					"user_avatar": user_avatar,
 					"is_host": False,
@@ -252,7 +252,7 @@ def refresh_sfu_token(meeting_id: str) -> dict:
 	if frappe.session.user not in meeting.get_members():
 		frappe.throw(_("Not a meeting member"))
 
-	from meet.utils.sfu_config import get_sfu_config
+	from meet.utils.sfu_config import get_sfu_config, get_tenant
 
 	sfu_config = get_sfu_config()
 
@@ -266,7 +266,7 @@ def refresh_sfu_token(meeting_id: str) -> dict:
 	auth_payload = {
 		"user_id": frappe.session.user,
 		"meeting_id": meeting_id,
-		"tenant": frappe.local.site,
+		"tenant": get_tenant(),
 		"user_name": user_fullname,
 		"user_avatar": user_avatar,
 		"is_host": is_host,
@@ -307,7 +307,7 @@ def get_sfu_presence_preview_token(meeting_id: str) -> dict:
 	auth_payload = {
 		"user_id": frappe.session.user,
 		"meeting_id": meeting_id,
-		"tenant": frappe.local.site,
+		"tenant": get_tenant(),
 		"scope": "presence-preview",
 		"session_id": session_id,
 		"exp": now + expiry_seconds,
@@ -383,7 +383,7 @@ def join_meeting_as_guest(meeting_id: str, guest_name: str, guest_id: str | None
 		"user_id": guest_id,
 		"user_name": guest_name_clean,
 		"meeting_id": meeting_id,
-		"tenant": frappe.local.site,
+		"tenant": get_tenant(),
 		"is_host": False,
 		"is_guest": True,
 		"scope": "full",
@@ -465,7 +465,7 @@ def get_approved_guest_connection_details(meeting_id: str, guest_id: str) -> dic
 		"user_id": guest_id,
 		"user_name": guest_name,
 		"meeting_id": meeting_id,
-		"tenant": frappe.local.site,
+		"tenant": get_tenant(),
 		"is_host": False,
 		"is_guest": True,
 		"scope": "full",
