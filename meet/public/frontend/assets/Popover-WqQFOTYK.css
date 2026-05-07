@@ -1,0 +1,1 @@
+@keyframes popover-enter{0%{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}@keyframes popover-exit{0%{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(4px)}}.PopoverContent.has-transition[data-state=open]{animation:.15s ease-out popover-enter}.PopoverContent.has-transition[data-state=closed]{animation:.15s ease-in popover-exit}

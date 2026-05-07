@@ -54,9 +54,11 @@ jspm_packages/
 # Aider AI Chat
 .aider*
 
-meet/public/frontend
+# 2026-05-07 (NORA #28) — frontend build outputs are committed on this branch.
+# See docs/COMMIT-BUILD-PATTERN.md in neoffice-devops.
+# meet/public/frontend
 meet/public/node_modules
 
 #Frappe
 
-meet/www/meet.html
+# meet/www/meet.html

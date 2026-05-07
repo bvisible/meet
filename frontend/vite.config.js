@@ -8,6 +8,9 @@ export default defineConfig({
 	plugins: [
 		frappeui({
 			frontendRoute: "/meet",
+			buildConfig: {
+				indexHtmlPath: "../meet/www/meet.html",
+			},
 		}),
 		vue(),
 	],
