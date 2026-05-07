@@ -409,6 +409,14 @@ export class MediasoupManager {
 		this.consumerManager.closeConsumer(consumerId);
 	}
 
+	async pauseProducer(producerId: string): Promise<boolean> {
+		return this.producerManager.pauseProducer(producerId);
+	}
+
+	async resumeProducer(producerId: string): Promise<boolean> {
+		return this.producerManager.resumeProducer(producerId);
+	}
+
 	async updateConsumerPreferences(options: {
 		consumerId: string;
 		visible: boolean;

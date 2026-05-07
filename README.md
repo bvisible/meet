@@ -10,8 +10,12 @@
 
 </div>
 
+<img width="2560" height="1457" alt="Frappe Meet screenshot" src="https://github.com/user-attachments/assets/aa124052-dc35-4f0d-b974-d47d2d813e70" />
+
+<br>
+
 > [!WARNING]  
-> Frappe Meet is an alpha product and is not yet ready for production!
+> Frappe Meet is in beta and there might be few bugs!
 
 ## Frappe Meet
 
@@ -28,6 +32,10 @@ Frappe Meet is a video conferencing app built with simplicity, quality, and reli
 - [Mediasoup](https://github.com/versatica/mediasoup): Cutting Edge WebRTC Video Conferencing.
 - [Frappe Framework](https://github.com/frappe/frappe): A full-stack web application framework.
 - [Frappe UI](https://github.com/frappe/frappe-ui): A Vue-based UI library, to provide a modern user interface.
+
+### Self-Hosting
+
+Deploying Frappe Meet on your own server is quick and easy using our automated Docker Compose setup. For complete instructions, check out the [Self-Hosting Guide](deploy/README.md).
 
 ### Local Development
 

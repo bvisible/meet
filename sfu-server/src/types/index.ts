@@ -181,6 +181,14 @@ export interface ClientToServerEvents {
 		data: { producerId: string },
 		callback: (response: CloseProducerResponse) => void,
 	) => void;
+	pause_producer: (
+		data: { producerId: string },
+		callback: (response: SFUResponse & { paused?: boolean }) => void,
+	) => void;
+	resume_producer: (
+		data: { producerId: string },
+		callback: (response: SFUResponse & { resumed?: boolean }) => void,
+	) => void;
 	close_consumer: (
 		data: { consumerId: string },
 		callback: (response: SFUResponse) => void,

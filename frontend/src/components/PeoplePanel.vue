@@ -78,16 +78,14 @@
 
 <script setup lang="ts">
 import { FormControl } from "frappe-ui";
-import { computed, inject, ref } from "vue";
-import type { Participant } from "../types";
-import { getInitials } from "../utils/text.ts";
+import { computed, ref } from "vue";
+import { useMeetingContext } from "../composables/useMeetingContext";
+import type { Participant } from "../utils/media/ParticipantManager";
+import { getInitials } from "../utils/text";
 import PeopleParticipantTile from "./PeopleParticipantTile.vue";
 import PeopleWaitingSection from "./PeopleWaitingSection.vue";
 
-const meetingState = inject("meetingState") as {
-	raisedHands?: { value: Record<string, string> };
-	lobbyUsers?: { value: Array<LobbyUser> };
-};
+const meetingCtx = useMeetingContext();
 
 interface LobbyUser {
 	userId: string;
@@ -112,6 +110,7 @@ interface Props {
 	isCameraOn: boolean;
 	creatorUserId: string;
 	coHosts: string[];
+	lobbyUsers?: LobbyUser[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -122,6 +121,7 @@ const props = withDefaults(defineProps<Props>(), {
 	isCameraOn: false,
 	creatorUserId: "",
 	coHosts: () => [],
+	lobbyUsers: undefined,
 });
 
 const emit = defineEmits<{
@@ -149,7 +149,10 @@ const isHost = computed(() => {
 });
 
 const lobbyUsers = computed(() => {
-	return meetingState?.lobbyUsers?.value || [];
+	if (props.lobbyUsers !== undefined) {
+		return props.lobbyUsers;
+	}
+	return meetingCtx?.lobbyStore.lobbyUsers || [];
 });
 
 const filteredLobbyUsers = computed(() => {
@@ -165,7 +168,7 @@ const filteredLobbyUsers = computed(() => {
 });
 
 const participantsList = computed(() => {
-	const raisedHands = meetingState?.raisedHands?.value || {};
+	const raisedHands = meetingCtx?.raiseHandStore.raisedHands || {};
 
 	return Object.values(props.participants).sort((a, b) => {
 		// 1. Raised hands first

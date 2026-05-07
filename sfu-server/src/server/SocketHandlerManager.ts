@@ -773,6 +773,38 @@ export class SocketHandlerManager {
 				callback({ success: false, error: (error as Error).message });
 			}
 		});
+
+		socket.on('pause_producer', async (data, callback) => {
+			try {
+				this.authManager.ensureFullAccess(socket);
+				const { producerId } = data;
+				const paused = await this.mediasoup.pauseProducer(producerId);
+
+				callback({ success: true, paused });
+			} catch (error) {
+				loggers.socketHandler.error(
+					'Error pausing producer: %s',
+					(error as Error).message,
+				);
+				callback({ success: false, error: (error as Error).message });
+			}
+		});
+
+		socket.on('resume_producer', async (data, callback) => {
+			try {
+				this.authManager.ensureFullAccess(socket);
+				const { producerId } = data;
+				const resumed = await this.mediasoup.resumeProducer(producerId);
+
+				callback({ success: true, resumed });
+			} catch (error) {
+				loggers.socketHandler.error(
+					'Error resuming producer: %s',
+					(error as Error).message,
+				);
+				callback({ success: false, error: (error as Error).message });
+			}
+		});
 	}
 
 	private setupMediaControlHandlers(socket: Socket): void {

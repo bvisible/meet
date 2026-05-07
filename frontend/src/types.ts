@@ -1,19 +1,8 @@
-import type { UserData } from "../../types";
-
 export type Platform = "win" | "mac" | "linux" | "unknown";
 
 export interface FrappeRequestError extends Error {
 	messages: string[];
-}
-
-export interface Participant {
-	user_id: string;
-	user_name?: string;
-	avatar?: UserData["avatar"];
-	initials?: string;
-	audio_enabled?: UserData["audio_enabled"];
-	video_enabled?: UserData["video_enabled"];
-	is_guest?: UserData["is_guest"];
+	exc_type: string;
 }
 
 export interface ParticipantPreview {
@@ -25,11 +14,59 @@ export interface ParticipantPreview {
 	is_guest?: boolean;
 }
 
-export type {
-	ParticipantJoinedEvent,
-	ParticipantLeftEvent,
-	PresenceJoinResponse,
-	PresenceParticipantsResponse,
-	PresenceTokenResponse,
-	UserData,
-} from "../../types";
+export interface PresenceTokenResponse {
+	auth_token?: string;
+	sfu_url?: string;
+	sfu_port?: number;
+	error?: string;
+}
+
+export interface PresenceParticipant {
+	user_id?: string;
+	id: string;
+	info: {
+		name?: string;
+		avatar?: string;
+		userId?: string;
+		audio_enabled?: boolean;
+		video_enabled?: boolean;
+		is_guest?: boolean;
+	};
+}
+
+export interface PresenceParticipantsResponse {
+	success: boolean;
+	participants?: PresenceParticipant[];
+	error?: string;
+}
+
+export interface PresenceJoinResponse {
+	success: boolean;
+	error?: string;
+}
+
+export interface UserData {
+	name: string;
+	userId: string;
+	avatar?: string;
+	audio_enabled: boolean;
+	video_enabled: boolean;
+	is_guest?: boolean;
+}
+
+export interface ParticipantJoinedEvent {
+	roomId: string;
+	participantId: string;
+	userData: UserData;
+}
+
+export interface ParticipantLeftEvent {
+	roomId: string;
+	participantId: string;
+}
+
+declare module "vue" {
+	interface ComponentCustomProperties {
+		$platform: Platform;
+	}
+}

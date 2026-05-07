@@ -1,7 +1,7 @@
 <template>
 	<div
-		class="w-full overflow-hidden shrink-0 transition-[height,margin] duration-500 ease-in-out"
-		:class="{ 'mb-4': isVisible }"
+		class="pointer-events-none w-full overflow-hidden shrink-0 transition-[height,margin] duration-500 ease-in-out"
+		:class="{ 'mt-2 mb-2': isVisible }"
 		:style="{ height: toolbarHeight }"
 	>
 		<div
@@ -36,7 +36,6 @@
 				<Button
 					@click="$emit('toggle-camera')"
 					variant="solid"
-					:theme="isCameraOn ? 'gray' : 'orange'"
 					size="2xl"
 					class="!rounded-full p-0 !bg-opacity-90 hover:!bg-opacity-100 transition-all duration-200 hover:scale-105 active:scale-95"
 					:class="{
@@ -56,7 +55,6 @@
 					v-if="canScreenShare()"
 					@click="$emit('toggle-screen-share')"
 					variant="solid"
-					:theme="isScreenSharing ? 'orange' : 'gray'"
 					size="2xl"
 					class="!rounded-full p-0 !bg-opacity-90 hover:!bg-opacity-100 transition-all duration-200 hover:scale-105 active:scale-95"
 					:class="{
@@ -154,11 +152,7 @@
 				</div>
 
 				<!-- More Options -->
-				<div
-					class="relative"
-					ref="dropdownContainer"
-					@click="handleDropdownClick"
-				>
+				<div class="relative" ref="dropdownContainer" @click="handleDropdownClick">
 					<Dropdown :options="moreOptions" placement="top">
 						<template #default>
 							<Button
@@ -209,9 +203,17 @@
 	/>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { Button, Dropdown } from "frappe-ui";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import {
+	type Component,
+	computed,
+	onMounted,
+	onUnmounted,
+	ref,
+	watch,
+} from "vue";
+import LucideBug from "~icons/lucide/bug";
 import { useMeetingDoc } from "../composables/useMeetingDoc";
 import { useResponsiveGrid } from "../composables/useResponsiveGrid";
 import { autoHideToolbar } from "../data/mediaPreferences";
@@ -220,88 +222,45 @@ import MeetingInfoDialog from "./MeetingInfoDialog.vue";
 import ReactionPicker from "./ReactionPicker.vue";
 import SettingsDialog from "./settings/SettingsDialog.vue";
 
-const props = defineProps({
-	isChatOpen: {
-		type: Boolean,
-		required: true,
-	},
-	isPeopleOpen: {
-		type: Boolean,
-		default: false,
-	},
-	hasUnread: {
-		type: Boolean,
-		default: false,
-	},
-	lobbyUserCount: {
-		type: Number,
-		default: 0,
-	},
-	isMicOn: {
-		type: Boolean,
-		required: true,
-	},
-	isCameraOn: {
-		type: Boolean,
-		required: true,
-	},
-	isScreenSharing: {
-		type: Boolean,
-		required: true,
-	},
-	isHandRaised: {
-		type: Boolean,
-		default: false,
-	},
-	isReactionPickerOpen: {
-		type: Boolean,
-		default: false,
-	},
-	meetingId: {
-		type: String,
-		default: "",
-	},
-	meetingTitle: {
-		type: String,
-		default: "",
-	},
-	currentUser: {
-		type: Object,
-		default: null,
-	},
-	isFullscreen: {
-		type: Boolean,
-		default: false,
-	},
-	cameraPermissionGranted: {
-		type: Boolean,
-		default: false,
-	},
-	microphonePermissionGranted: {
-		type: Boolean,
-		default: false,
-	},
-});
-
-const { getMeetingDoc } = useMeetingDoc();
-
-if (props.meetingId) {
-	getMeetingDoc(props.meetingId);
+interface MoreOption {
+	icon: string | Component;
+	label: string;
+	onClick: () => void;
 }
 
-const emit = defineEmits([
-	"toggle-chat",
-	"toggle-people",
-	"toggle-reactions",
-	"toggle-microphone",
-	"toggle-camera",
-	"toggle-screen-share",
-	"toggle-fullscreen",
-	"toggle-raise-hand",
-	"end-call",
-	"device-changed",
-	"update:isReactionPickerOpen",
-]);
+const props = defineProps<{
+	isChatOpen: boolean;
+	isPeopleOpen?: boolean;
+	hasUnread?: boolean;
+	lobbyUserCount?: number;
+	isMicOn: boolean;
+	isCameraOn: boolean;
+	isScreenSharing: boolean;
+	isHandRaised?: boolean;
+	isReactionPickerOpen?: boolean;
+	meetingId?: string;
+	meetingTitle?: string;
+	currentUser?: unknown;
+	isFullscreen?: boolean;
+	cameraPermissionGranted?: boolean;
+	microphonePermissionGranted?: boolean;
+}>();
+
+const emit = defineEmits<{
+	"toggle-chat": [];
+	"toggle-people": [];
+	"toggle-reactions": [emoji: string];
+	"toggle-microphone": [];
+	"toggle-camera": [];
+	"toggle-screen-share": [];
+	"toggle-fullscreen": [];
+	"toggle-raise-hand": [];
+	"report-problem": [];
+	"end-call": [];
+	"device-changed": [event: unknown];
+	"update:isReactionPickerOpen": [value: boolean];
+	"visibility-change": [visible: boolean];
+}>();
 
 const { windowWidth } = useResponsiveGrid();
 const isMobile = computed(() => windowWidth.value < 768);
@@ -329,6 +288,14 @@ const moreOptions = computed(() => [
 		onClick: () => {
 			emit("toggle-fullscreen");
 			resetHideTimer();
+		},
+	},
+	{
+		icon: LucideBug,
+		label: "Report an issue",
+		onClick: () => {
+			emit("report-problem");
+			resetHideTimer(true);
 		},
 	},
 	...(isMobile.value
@@ -390,7 +357,7 @@ const resetHideTimer = (force = false) => {
 
 	hideTimeout = setTimeout(() => {
 		isVisible.value = false;
-	}, 3000);
+	}, 10000);
 };
 
 const handleActivity = () => {
@@ -457,6 +424,8 @@ const handleReactionSelect = (emoji) => {
 const updateReactionPickerOpen = (value) => {
 	emit("update:isReactionPickerOpen", value);
 };
+
+watch(isVisible, (val) => emit("visibility-change", val));
 
 watch(autoHideToolbar, (shouldAutoHide) => {
 	if (!shouldAutoHide) {

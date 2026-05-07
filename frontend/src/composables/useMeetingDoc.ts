@@ -1,6 +1,6 @@
 import { createDocumentResource } from "frappe-ui";
 import { type ComputedRef, computed, type Ref, ref } from "vue";
-import { session } from "../data/session.js";
+import { session } from "../data/session";
 
 interface MeetingDocument {
 	allow_guest?: boolean;
@@ -9,6 +9,7 @@ interface MeetingDocument {
 	title?: string;
 	name?: string;
 	co_hosts?: { user: string }[];
+	banned_users?: { user: string }[];
 }
 
 interface DocumentResource {

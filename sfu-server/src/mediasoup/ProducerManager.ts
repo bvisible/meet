@@ -93,6 +93,56 @@ export class ProducerManager extends EventEmitter {
 		return { isScreen, removedConsumers: [] };
 	}
 
+	async pauseProducer(producerId: string): Promise<boolean> {
+		const producerData = this.producers.get(producerId);
+		if (!producerData) {
+			return false;
+		}
+
+		const { producer } = producerData;
+		if (producer.paused) {
+			return false;
+		}
+
+		try {
+			await producer.pause();
+			loggers.producerManager.info('Producer paused: %s', producerId);
+			return true;
+		} catch (error) {
+			loggers.producerManager.warn(
+				'Failed to pause producer %s: %s',
+				producerId,
+				(error as Error).message,
+			);
+			return false;
+		}
+	}
+
+	async resumeProducer(producerId: string): Promise<boolean> {
+		const producerData = this.producers.get(producerId);
+		if (!producerData) {
+			return false;
+		}
+
+		const { producer } = producerData;
+		if (!producer.paused) {
+			return false;
+		}
+
+		try {
+			await producer.resume();
+			loggers.producerManager.info('Producer resumed: %s', producerId);
+			return true;
+		} catch (error) {
+			loggers.producerManager.warn(
+				'Failed to resume producer %s: %s',
+				producerId,
+				(error as Error).message,
+			);
+			return false;
+		}
+	}
+
 	getProducer(producerId: string): mediasoup.types.Producer | undefined {
 		return this.producers.get(producerId)?.producer;
 	}

@@ -33,7 +33,7 @@ export const pushToTalkEnabled: Ref<boolean> = ref(
 );
 
 export const autoHideToolbar: Ref<boolean> = ref(
-	readBool("mediaPref.autoHideToolbar", true),
+	readBool("mediaPref.autoHideToolbar", false),
 );
 
 export function setNoiseCancellationEnabled(val: boolean): void {
@@ -96,5 +96,5 @@ export function loadMediaPreferences(): void {
 		false,
 	);
 	pushToTalkEnabled.value = readBool("mediaPref.pushToTalk", false);
-	autoHideToolbar.value = readBool("mediaPref.autoHideToolbar", true);
+	autoHideToolbar.value = readBool("mediaPref.autoHideToolbar", false);
 }
