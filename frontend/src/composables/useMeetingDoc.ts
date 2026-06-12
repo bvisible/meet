@@ -8,6 +8,7 @@ interface MeetingDocument {
 	owner?: string;
 	title?: string;
 	name?: string;
+	host_only_chat?: boolean;
 	co_hosts?: { user: string }[];
 	banned_users?: { user: string }[];
 }
@@ -47,8 +48,12 @@ const currentMeetingId: Ref<string | null> = ref(null);
 
 export function useMeetingDoc(): UseMeetingDocReturn {
 	const getMeetingDoc = (meetingId: string): DocumentResource => {
-		if (meetingDoc.value) {
+		if (meetingDoc.value && currentMeetingId.value === meetingId) {
 			return meetingDoc.value;
+		}
+
+		if (meetingDoc.value && currentMeetingId.value !== meetingId) {
+			clearMeetingDoc();
 		}
 
 		const docResource = createDocumentResource({

@@ -5,7 +5,7 @@ test.describe("Chat", () => {
 		const guest = await createParticipant();
 		const message = `hello-${test.info().parallelIndex}`;
 
-		await hostPage.goto(`/meet/${meetingId}?created=true`);
+		await hostPage.goto(`/meet/${meetingId}`);
 		await joinFromPreview(hostPage);
 		await guest.joinAsGuest(meetingId, `Guest Chat ${test.info().parallelIndex}`);
 
@@ -25,7 +25,7 @@ test.describe("Chat", () => {
 		const guest = await createParticipant();
 		const message = `unread-${test.info().parallelIndex}`;
 
-		await hostPage.goto(`/meet/${meetingId}?created=true`);
+		await hostPage.goto(`/meet/${meetingId}`);
 		await joinFromPreview(hostPage);
 		await guest.joinAsGuest(meetingId, `Guest Unread ${test.info().parallelIndex}`);
 

@@ -1,15 +1,15 @@
 export function getErrorMessage(error: unknown): string {
-	if (error instanceof Error) {
-		return error.message;
+	if (!(error instanceof Error)) {
+		return String(error);
 	}
-	if (typeof error === "object" && error !== null) {
-		const err = error as Record<string, unknown>;
-		if (Array.isArray(err.messages)) {
-			return (err.messages as string[]).join(", ");
-		}
-		if (typeof err.message === "string") {
-			return err.message;
-		}
+
+	if (
+		"messages" in error &&
+		Array.isArray(error.messages) &&
+		error.messages.length > 0
+	) {
+		return error.messages[error.messages.length - 1];
 	}
-	return String(error);
+
+	return error.message || "An unknown error occurred";
 }

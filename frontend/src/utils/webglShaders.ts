@@ -31,18 +31,16 @@ const SHADERS = {
       vec2 texelSize = 1.0 / u_resolution;
 
       // Get current pixel's mask value (0 = background, 1 = person)
-      float centerMask = texture2D(u_mask, v_texCoord).r;
+      float centerMask = texture2D(u_mask, v_texCoord).a;
       vec4 originalColor = texture2D(u_image, v_texCoord);
 
-	  // If this is clearly foreground (person), just return the original color
-      if (centerMask > 0.95) {
+      // Smooth the mask to reduce blockiness from low-res segmentation
+      float smoothMask = smoothstep(0.02, 0.98, centerMask);
+
+      if (smoothMask > 0.99) {
         gl_FragColor = originalColor;
         return;
       }
-
-      // Calculate blur radius based on mask (CoC simulation)
-      // Background gets full blur, foreground edges get partial blur for smooth transition
-      float blurRadius = (1.0 - centerMask) * u_sigma;
 
       vec4 color = vec4(0.0);
       float weightSum = 0.0;
@@ -58,11 +56,12 @@ const SHADERS = {
           vec2 sampleCoord = v_texCoord + offset;
 
           // Get mask value at sample position
-          float sampleMask = texture2D(u_mask, sampleCoord).r;
+          float sampleMask = texture2D(u_mask, sampleCoord).a;
+          float sampleSmoothMask = smoothstep(0.02, 0.98, sampleMask);
 
           // Only sample background pixels for background blur
           // This prevents foreground from bleeding into background
-          float maskWeight = 1.0 - max(sampleMask - centerMask, 0.0);
+          float maskWeight = 1.0 - max(sampleSmoothMask - smoothMask, 0.0);
 
           vec4 sampleColor = texture2D(u_image, sampleCoord);
           float finalWeight = weight * maskWeight;
@@ -76,8 +75,8 @@ const SHADERS = {
       vec4 blurredColor = weightSum > 0.001 ? color / weightSum : originalColor;
 
       // Blend: sharp foreground + blurred background
-      // Use centerMask to smoothly transition between blurred and original
-      gl_FragColor = mix(blurredColor, originalColor, centerMask);
+      // Use smoothMask to smoothly transition between blurred and original
+      gl_FragColor = mix(blurredColor, originalColor, smoothMask);
     }
   `,
 
@@ -97,36 +96,27 @@ const SHADERS = {
       vec2 texelSize = 1.0 / u_resolution;
 
       // Get current pixel's mask value (0 = background, 1 = person)
-      float centerMask = texture2D(u_mask, v_texCoord).r;
+      float centerMask = texture2D(u_mask, v_texCoord).a;
       vec4 originalColor = texture2D(u_image, v_texCoord);
       vec4 backgroundColor = texture2D(u_background, v_texCoord);
 
-      // Solid foreground (person interior) - no light wrap needed
-      if (centerMask > 0.9) {
-        gl_FragColor = originalColor;
-        return;
-      }
+      // Smooth the mask to reduce blockiness from low-res segmentation
+      float smoothMask = smoothstep(0.15, 0.65, centerMask);
 
-      // Solid background - use background color
-      if (centerMask < 0.1) {
-        gl_FragColor = backgroundColor;
-        return;
-      }
-
-      // Edge region (0.1 < mask < 0.9) - apply light wrapping
+      // Edge region - apply light wrapping
       // Calculate edge normal by sampling mask gradient
-      float maskLeft = texture2D(u_mask, v_texCoord + vec2(-texelSize.x, 0.0)).r;
-      float maskRight = texture2D(u_mask, v_texCoord + vec2(texelSize.x, 0.0)).r;
-      float maskUp = texture2D(u_mask, v_texCoord + vec2(0.0, -texelSize.y)).r;
-      float maskDown = texture2D(u_mask, v_texCoord + vec2(0.0, texelSize.y)).r;
+      float maskLeft = texture2D(u_mask, v_texCoord + vec2(-3.0 * texelSize.x, 0.0)).a;
+      float maskRight = texture2D(u_mask, v_texCoord + vec2(3.0 * texelSize.x, 0.0)).a;
+      float maskUp = texture2D(u_mask, v_texCoord + vec2(0.0, -3.0 * texelSize.y)).a;
+      float maskDown = texture2D(u_mask, v_texCoord + vec2(0.0, 3.0 * texelSize.y)).a;
 
       // Gradient points from background to foreground
       vec2 gradient = vec2(maskRight - maskLeft, maskDown - maskUp);
       float gradientLength = length(gradient);
 
-      // If gradient is too small, just composite normally
+      // If gradient is too small, just composite normally with smooth mask
       if (gradientLength < 0.01) {
-        gl_FragColor = mix(backgroundColor, originalColor, centerMask);
+        gl_FragColor = mix(backgroundColor, originalColor, smoothMask);
         return;
       }
 
@@ -174,17 +164,54 @@ const SHADERS = {
       }
 
       // Calculate light wrap strength based on:
-      // 1. How close to edge (1 - centerMask gives more wrap to background pixels)
+      // 1. How close to edge (1 - smoothMask gives more wrap to background pixels)
       // 2. Edge falloff (strongest at edges, fades toward center)
-      float edgeStrength = smoothstep(0.3, 0.7, 1.0 - centerMask);
+      float edgeStrength = smoothstep(0.3, 0.7, 1.0 - smoothMask);
 
       // Apply light wrap: blend sampled background color into edge pixels
       vec3 wrappedColor = mix(originalColor.rgb, sampledColor, edgeStrength);
 
       // Final compositing: blend wrapped foreground with background
-      vec3 finalColor = mix(backgroundColor.rgb, wrappedColor, centerMask);
+      vec3 finalColor = mix(backgroundColor.rgb, wrappedColor, smoothMask);
 
       gl_FragColor = vec4(finalColor, 1.0);
+    }
+  `,
+
+	maskBlurFragment: `
+	#ifdef GL_FRAGMENT_PRECISION_HIGH
+	precision highp float;
+	#else
+	precision mediump float;
+	#endif
+    uniform sampler2D u_mask;
+    uniform vec2 u_resolution;
+    uniform vec2 u_direction;
+    uniform float u_sigma;
+    varying vec2 v_texCoord;
+
+    float gaussian(float x, float sigma) {
+      return exp(-(x * x) / (2.0 * sigma * sigma)) / (sigma * sqrt(2.0 * 3.14159));
+    }
+
+    void main() {
+      vec2 texelSize = 1.0 / u_resolution;
+      float color = 0.0;
+      float weightSum = 0.0;
+
+      const int MAX_KERNEL_SIZE = 15;
+      for (int i = -MAX_KERNEL_SIZE; i <= MAX_KERNEL_SIZE; i++) {
+        if (abs(float(i)) <= 3.0 * u_sigma) {
+          float weight = gaussian(float(i), u_sigma);
+          vec2 offset = vec2(float(i)) * u_direction * texelSize;
+          float sample = texture2D(u_mask, v_texCoord + offset).a;
+          color += sample * weight;
+          weightSum += weight;
+        }
+      }
+
+      float center = texture2D(u_mask, v_texCoord).a;
+      gl_FragColor = vec4(0.0, 0.0, 0.0, weightSum > 0.001 ? color / weightSum : center);
     }
   `,
 };
@@ -206,7 +233,6 @@ export class WebGLManager {
 	private program: WebGLProgram | null = null;
 	private positionBuffer: WebGLBuffer | null = null;
 	private texCoordBuffer: WebGLBuffer | null = null;
-	private outputCanvas: HTMLCanvasElement | null = null;
 
 	// Cached locations for blur program
 	private texCoordLocation = -1;
@@ -215,6 +241,39 @@ export class WebGLManager {
 	private sigmaLocation: WebGLUniformLocation | null = null;
 	private imageLocation: WebGLUniformLocation | null = null;
 	private maskLocation: WebGLUniformLocation | null = null;
+
+	// cache lightwrap program (compiled once, reused every frame)
+	private lightWrapProgram: WebGLProgram | null = null;
+	private lightWrapTexCoordLocation = -1;
+	private lightWrapResolutionLocation: WebGLUniformLocation | null = null;
+	private lightWrapImageLocation: WebGLUniformLocation | null = null;
+	private lightWrapMaskLocation: WebGLUniformLocation | null = null;
+	private lightWrapBackgroundLocation: WebGLUniformLocation | null = null;
+
+	// cache mask blur program (compiled once, reused every frame for virtual bg)
+	private maskBlurProgram: WebGLProgram | null = null;
+	private maskBlurTexCoordLocation = -1;
+	private maskBlurResolutionLocation: WebGLUniformLocation | null = null;
+	private maskBlurDirectionLocation: WebGLUniformLocation | null = null;
+	private maskBlurSigmaLocation: WebGLUniformLocation | null = null;
+	private maskBlurMaskLocation: WebGLUniformLocation | null = null;
+
+	// Cached FBO ping-pong pair for mask blur — reused every frame, recreated on resize
+	private maskBlurCache: {
+		width: number;
+		height: number;
+		fboA: WebGLFramebuffer | null;
+		textureA: WebGLTexture | null;
+		fboB: WebGLFramebuffer | null;
+		textureB: WebGLTexture | null;
+	} = {
+		width: 0,
+		height: 0,
+		fboA: null,
+		textureA: null,
+		fboB: null,
+		textureB: null,
+	};
 
 	constructor(canvas: HTMLCanvasElement) {
 		const gl =
@@ -261,11 +320,9 @@ export class WebGLManager {
 		this.imageLocation = this.gl.getUniformLocation(this.program, "u_image");
 		this.maskLocation = this.gl.getUniformLocation(this.program, "u_mask");
 
-		// reusable buffers and canvas for perf
+		// reusable buffers for perf
 		this.positionBuffer = this.gl.createBuffer();
 		this.texCoordBuffer = this.gl.createBuffer();
-		this.outputCanvas = document.createElement("canvas");
-		this.outputCanvas.getContext("2d", { willReadFrequently: true }); // for perf as well
 
 		// Setup position buffer with quad vertices
 		this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
@@ -281,6 +338,112 @@ export class WebGLManager {
 			this.gl.ARRAY_BUFFER,
 			new Float32Array([0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0]),
 			this.gl.STATIC_DRAW,
+		);
+
+		this.initLightWrapProgram();
+		try {
+			this.initMaskBlurProgram();
+		} catch (_e) {
+			console.warn(
+				"Mask blur program init failed, virtual bg edges may appear coarser:",
+				_e,
+			);
+		}
+	}
+
+	private initLightWrapProgram(): void {
+		const vertexShader = this.createShader(
+			this.gl.VERTEX_SHADER,
+			SHADERS.vertex,
+		);
+		const fragmentShader = this.createShader(
+			this.gl.FRAGMENT_SHADER,
+			SHADERS.lightWrapFragment,
+		);
+
+		if (!vertexShader || !fragmentShader) {
+			if (vertexShader) this.gl.deleteShader(vertexShader);
+			if (fragmentShader) this.gl.deleteShader(fragmentShader);
+			throw new WebGLError("Failed to create light wrap shaders");
+		}
+
+		try {
+			this.lightWrapProgram = this.createProgram(vertexShader, fragmentShader);
+			if (!this.lightWrapProgram) {
+				throw new WebGLError("Failed to create light wrap shader program");
+			}
+		} finally {
+			this.gl.deleteShader(vertexShader);
+			this.gl.deleteShader(fragmentShader);
+		}
+
+		this.lightWrapTexCoordLocation = this.gl.getAttribLocation(
+			this.lightWrapProgram,
+			"a_texCoord",
+		);
+		this.lightWrapResolutionLocation = this.gl.getUniformLocation(
+			this.lightWrapProgram,
+			"u_resolution",
+		);
+		this.lightWrapImageLocation = this.gl.getUniformLocation(
+			this.lightWrapProgram,
+			"u_image",
+		);
+		this.lightWrapMaskLocation = this.gl.getUniformLocation(
+			this.lightWrapProgram,
+			"u_mask",
+		);
+		this.lightWrapBackgroundLocation = this.gl.getUniformLocation(
+			this.lightWrapProgram,
+			"u_background",
+		);
+	}
+
+	private initMaskBlurProgram(): void {
+		const vertexShader = this.createShader(
+			this.gl.VERTEX_SHADER,
+			SHADERS.vertex,
+		);
+		const fragmentShader = this.createShader(
+			this.gl.FRAGMENT_SHADER,
+			SHADERS.maskBlurFragment,
+		);
+
+		if (!vertexShader || !fragmentShader) {
+			if (vertexShader) this.gl.deleteShader(vertexShader);
+			if (fragmentShader) this.gl.deleteShader(fragmentShader);
+			throw new WebGLError("Failed to create mask blur shaders");
+		}
+
+		try {
+			this.maskBlurProgram = this.createProgram(vertexShader, fragmentShader);
+			if (!this.maskBlurProgram) {
+				throw new WebGLError("Failed to create mask blur shader program");
+			}
+		} finally {
+			this.gl.deleteShader(vertexShader);
+			this.gl.deleteShader(fragmentShader);
+		}
+
+		this.maskBlurTexCoordLocation = this.gl.getAttribLocation(
+			this.maskBlurProgram,
+			"a_texCoord",
+		);
+		this.maskBlurResolutionLocation = this.gl.getUniformLocation(
+			this.maskBlurProgram,
+			"u_resolution",
+		);
+		this.maskBlurDirectionLocation = this.gl.getUniformLocation(
+			this.maskBlurProgram,
+			"u_direction",
+		);
+		this.maskBlurSigmaLocation = this.gl.getUniformLocation(
+			this.maskBlurProgram,
+			"u_sigma",
+		);
+		this.maskBlurMaskLocation = this.gl.getUniformLocation(
+			this.maskBlurProgram,
+			"u_mask",
 		);
 	}
 
@@ -359,7 +522,9 @@ export class WebGLManager {
 		return texture;
 	}
 
-	createTextureFromCanvas(canvas: HTMLCanvasElement): WebGLTexture | null {
+	createTextureFromSource(
+		source: ImageData | HTMLCanvasElement | ImageBitmap,
+	): WebGLTexture | null {
 		const texture = this.gl.createTexture();
 		if (!texture) return null;
 
@@ -385,14 +550,28 @@ export class WebGLManager {
 			this.gl.LINEAR,
 		);
 
-		this.gl.texImage2D(
-			this.gl.TEXTURE_2D,
-			0,
-			this.gl.RGBA,
-			this.gl.RGBA,
-			this.gl.UNSIGNED_BYTE,
-			canvas,
-		);
+		if (source instanceof ImageData) {
+			this.gl.texImage2D(
+				this.gl.TEXTURE_2D,
+				0,
+				this.gl.RGBA,
+				source.width,
+				source.height,
+				0,
+				this.gl.RGBA,
+				this.gl.UNSIGNED_BYTE,
+				source.data,
+			);
+		} else {
+			this.gl.texImage2D(
+				this.gl.TEXTURE_2D,
+				0,
+				this.gl.RGBA,
+				this.gl.RGBA,
+				this.gl.UNSIGNED_BYTE,
+				source,
+			);
+		}
 
 		return texture;
 	}
@@ -464,30 +643,264 @@ export class WebGLManager {
 		return canvas;
 	}
 
-	applyBlur(
-		imageData: ImageData,
-		maskData: Float32Array,
+	private createEmptyTexture(
+		width: number,
+		height: number,
+	): WebGLTexture | null {
+		const texture = this.gl.createTexture();
+		if (!texture) return null;
+
+		this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+		this.gl.texParameteri(
+			this.gl.TEXTURE_2D,
+			this.gl.TEXTURE_WRAP_S,
+			this.gl.CLAMP_TO_EDGE,
+		);
+		this.gl.texParameteri(
+			this.gl.TEXTURE_2D,
+			this.gl.TEXTURE_WRAP_T,
+			this.gl.CLAMP_TO_EDGE,
+		);
+		this.gl.texParameteri(
+			this.gl.TEXTURE_2D,
+			this.gl.TEXTURE_MIN_FILTER,
+			this.gl.LINEAR,
+		);
+		this.gl.texParameteri(
+			this.gl.TEXTURE_2D,
+			this.gl.TEXTURE_MAG_FILTER,
+			this.gl.LINEAR,
+		);
+
+		this.gl.texImage2D(
+			this.gl.TEXTURE_2D,
+			0,
+			this.gl.RGBA,
+			width,
+			height,
+			0,
+			this.gl.RGBA,
+			this.gl.UNSIGNED_BYTE,
+			null,
+		);
+
+		return texture;
+	}
+
+	private setupFramebuffer(fbo: WebGLFramebuffer, texture: WebGLTexture): void {
+		this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, fbo);
+		this.gl.framebufferTexture2D(
+			this.gl.FRAMEBUFFER,
+			this.gl.COLOR_ATTACHMENT0,
+			this.gl.TEXTURE_2D,
+			texture,
+			0,
+		);
+		this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+	}
+
+	private ensureMaskBlurCache(width: number, height: number): void {
+		if (
+			this.maskBlurCache.width === width &&
+			this.maskBlurCache.height === height &&
+			this.maskBlurCache.textureA
+		) {
+			return;
+		}
+
+		if (this.maskBlurCache.textureA) {
+			this.gl.deleteTexture(this.maskBlurCache.textureA);
+			this.maskBlurCache.textureA = null;
+		}
+		if (this.maskBlurCache.fboA) {
+			this.gl.deleteFramebuffer(this.maskBlurCache.fboA);
+			this.maskBlurCache.fboA = null;
+		}
+		if (this.maskBlurCache.textureB) {
+			this.gl.deleteTexture(this.maskBlurCache.textureB);
+			this.maskBlurCache.textureB = null;
+		}
+		if (this.maskBlurCache.fboB) {
+			this.gl.deleteFramebuffer(this.maskBlurCache.fboB);
+			this.maskBlurCache.fboB = null;
+		}
+
+		const textureA = this.createEmptyTexture(width, height);
+		if (!textureA)
+			throw new WebGLError("Failed to create mask cache texture A");
+		const fboA = this.gl.createFramebuffer();
+		if (!fboA) {
+			this.gl.deleteTexture(textureA);
+			throw new WebGLError("Failed to create mask cache FBO A");
+		}
+		this.setupFramebuffer(fboA, textureA);
+
+		const textureB = this.createEmptyTexture(width, height);
+		if (!textureB) {
+			this.gl.deleteTexture(textureA);
+			this.gl.deleteFramebuffer(fboA);
+			throw new WebGLError("Failed to create mask cache texture B");
+		}
+		const fboB = this.gl.createFramebuffer();
+		if (!fboB) {
+			this.gl.deleteTexture(textureA);
+			this.gl.deleteFramebuffer(fboA);
+			this.gl.deleteTexture(textureB);
+			throw new WebGLError("Failed to create mask cache FBO B");
+		}
+		this.setupFramebuffer(fboB, textureB);
+
+		this.maskBlurCache.width = width;
+		this.maskBlurCache.height = height;
+		this.maskBlurCache.textureA = textureA;
+		this.maskBlurCache.fboA = fboA;
+		this.maskBlurCache.textureB = textureB;
+		this.maskBlurCache.fboB = fboB;
+	}
+
+	private destroyMaskBlurCache(): void {
+		if (this.maskBlurCache.textureA) {
+			this.gl.deleteTexture(this.maskBlurCache.textureA);
+		}
+		if (this.maskBlurCache.fboA) {
+			this.gl.deleteFramebuffer(this.maskBlurCache.fboA);
+		}
+		if (this.maskBlurCache.textureB) {
+			this.gl.deleteTexture(this.maskBlurCache.textureB);
+		}
+		if (this.maskBlurCache.fboB) {
+			this.gl.deleteFramebuffer(this.maskBlurCache.fboB);
+		}
+		this.maskBlurCache.width = 0;
+		this.maskBlurCache.height = 0;
+		this.maskBlurCache.textureA = null;
+		this.maskBlurCache.fboA = null;
+		this.maskBlurCache.textureB = null;
+		this.maskBlurCache.fboB = null;
+	}
+
+	private renderMaskBlur(
+		maskTexture: WebGLTexture,
 		width: number,
 		height: number,
 		sigma: number,
-	): ImageData {
-		// Create texture from image data
-		const texture = this.createTexture(imageData);
+		direction: number[],
+		targetFbo: WebGLFramebuffer,
+	): void {
+		this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, targetFbo);
+		this.gl.viewport(0, 0, width, height);
+		this.gl.clearColor(0, 0, 0, 0);
+		this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+		if (!this.maskBlurProgram) {
+			throw new WebGLError("Mask blur program not initialized");
+		}
+
+		this.gl.useProgram(this.maskBlurProgram);
+
+		const positionLocation = 0;
+		this.gl.enableVertexAttribArray(positionLocation);
+		this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+		this.gl.vertexAttribPointer(
+			positionLocation,
+			2,
+			this.gl.FLOAT,
+			false,
+			0,
+			0,
+		);
+
+		this.gl.enableVertexAttribArray(this.maskBlurTexCoordLocation);
+		this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.texCoordBuffer);
+		this.gl.vertexAttribPointer(
+			this.maskBlurTexCoordLocation,
+			2,
+			this.gl.FLOAT,
+			false,
+			0,
+			0,
+		);
+
+		this.gl.uniform2f(this.maskBlurResolutionLocation, width, height);
+		this.gl.uniform2f(
+			this.maskBlurDirectionLocation,
+			direction[0],
+			direction[1],
+		);
+		this.gl.uniform1f(this.maskBlurSigmaLocation, sigma);
+
+		this.gl.activeTexture(this.gl.TEXTURE0);
+		this.gl.bindTexture(this.gl.TEXTURE_2D, maskTexture);
+		this.gl.uniform1i(this.maskBlurMaskLocation, 0);
+
+		this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+
+		this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+	}
+
+	private preprocessMask(
+		mask: ImageBitmap,
+		width: number,
+		height: number,
+	): WebGLTexture {
+		if (!this.maskBlurProgram) {
+			const texture = this.createTextureFromSource(mask);
+			if (!texture) {
+				throw new WebGLError("Failed to create mask texture");
+			}
+			return texture;
+		}
+
+		this.ensureMaskBlurCache(width, height);
+
+		const maskBlurSigma = 3.0;
+
+		const rawMaskTexture = this.createTextureFromSource(mask);
+		if (!rawMaskTexture) {
+			throw new WebGLError("Failed to create raw mask texture");
+		}
+
+		try {
+			// Horizontal pass
+			this.renderMaskBlur(
+				rawMaskTexture,
+				width,
+				height,
+				maskBlurSigma,
+				[1, 0],
+				this.maskBlurCache.fboA,
+			);
+
+			// Vertical pass
+			this.renderMaskBlur(
+				this.maskBlurCache.textureA,
+				width,
+				height,
+				maskBlurSigma,
+				[0, 1],
+				this.maskBlurCache.fboB,
+			);
+
+			return this.maskBlurCache.textureB;
+		} finally {
+			this.gl.deleteTexture(rawMaskTexture);
+		}
+	}
+
+	applyBlur(
+		source: HTMLCanvasElement,
+		mask: ImageBitmap,
+		width: number,
+		height: number,
+		sigma: number,
+	): HTMLCanvasElement {
+		// Create texture from source
+		const texture = this.createTextureFromSource(source);
 		if (!texture) {
 			throw new WebGLError("Failed to create texture");
 		}
 
-		// Create texture from mask data
-		const maskImageData = new ImageData(width, height);
-		for (let i = 0; i < maskData.length; i++) {
-			const pixelIndex = i * 4;
-			const maskValue = maskData[i] * 255;
-			maskImageData.data[pixelIndex] = maskValue;
-			maskImageData.data[pixelIndex + 1] = maskValue;
-			maskImageData.data[pixelIndex + 2] = maskValue;
-			maskImageData.data[pixelIndex + 3] = 255;
-		}
-		const maskTexture = this.createTexture(maskImageData);
+		const maskTexture = this.createTextureFromSource(mask);
 		if (!maskTexture) {
 			throw new WebGLError("Failed to create mask texture");
 		}
@@ -506,7 +919,7 @@ export class WebGLManager {
 			);
 
 			// Second pass: vertical blur
-			horizontalTexture = this.createTextureFromCanvas(horizontalResult);
+			horizontalTexture = this.createTextureFromSource(horizontalResult);
 			if (!horizontalTexture) {
 				throw new WebGLError("Failed to create horizontal texture");
 			}
@@ -520,25 +933,7 @@ export class WebGLManager {
 				[0, 1],
 			);
 
-			if (!this.outputCanvas) {
-				throw new WebGLError("Output canvas not initialized");
-			}
-
-			this.outputCanvas.width = width;
-			this.outputCanvas.height = height;
-			const outputCtx = this.outputCanvas.getContext("2d", {
-				willReadFrequently: true,
-			});
-
-			if (!outputCtx) {
-				throw new WebGLError("Failed to create output canvas context");
-			}
-
-			// Below snippet is a hack to avoid the y-axis flip while reading pixels
-			// from WebGL canvas. We use drawImage to copy the result to a 2D canvas,
-			// which automatically handles the coordinate system conversion.
-			outputCtx.drawImage(finalResult, 0, 0);
-			return outputCtx.getImageData(0, 0, width, height);
+			return finalResult;
 		} finally {
 			// Clean up textures
 			this.gl.deleteTexture(texture);
@@ -549,75 +944,35 @@ export class WebGLManager {
 		}
 	}
 
+	// used to apply the light wrap effect on the source image using the mask and background image
 	applyLightWrap(
-		imageData: ImageData,
-		maskData: Float32Array,
+		source: HTMLCanvasElement,
+		mask: ImageBitmap,
 		backgroundImageData: ImageData,
 		width: number,
 		height: number,
-	): ImageData {
-		const vertexShader = this.createShader(
-			this.gl.VERTEX_SHADER,
-			SHADERS.vertex,
-		);
-		const fragmentShader = this.createShader(
-			this.gl.FRAGMENT_SHADER,
-			SHADERS.lightWrapFragment,
-		);
-
-		if (!vertexShader || !fragmentShader) {
-			throw new WebGLError("Failed to create light wrap shaders");
+	): HTMLCanvasElement {
+		if (!this.lightWrapProgram) {
+			throw new WebGLError("Light wrap program not initialized");
 		}
 
-		const lightWrapProgram = this.createProgram(vertexShader, fragmentShader);
-		if (!lightWrapProgram) {
-			throw new WebGLError("Failed to create light wrap shader program");
-		}
-
-		// Cache locations for light wrap program
-		const texCoordLocation = this.gl.getAttribLocation(
-			lightWrapProgram,
-			"a_texCoord",
-		);
-		const resolutionLocation = this.gl.getUniformLocation(
-			lightWrapProgram,
-			"u_resolution",
-		);
-		const imageLocation = this.gl.getUniformLocation(
-			lightWrapProgram,
-			"u_image",
-		);
-		const maskLocation = this.gl.getUniformLocation(lightWrapProgram, "u_mask");
-		const backgroundLocation = this.gl.getUniformLocation(
-			lightWrapProgram,
-			"u_background",
-		);
-
-		const imageTexture = this.createTexture(imageData);
-		if (!imageTexture) {
-			throw new WebGLError("Failed to create image texture");
-		}
-
-		const maskImageData = new ImageData(width, height);
-		for (let i = 0; i < maskData.length; i++) {
-			const pixelIndex = i * 4;
-			const maskValue = maskData[i] * 255;
-			maskImageData.data[pixelIndex] = maskValue;
-			maskImageData.data[pixelIndex + 1] = maskValue;
-			maskImageData.data[pixelIndex + 2] = maskValue;
-			maskImageData.data[pixelIndex + 3] = 255;
-		}
-		const maskTexture = this.createTexture(maskImageData);
-		if (!maskTexture) {
-			throw new WebGLError("Failed to create mask texture");
-		}
-
-		const backgroundTexture = this.createTexture(backgroundImageData);
-		if (!backgroundTexture) {
-			throw new WebGLError("Failed to create background texture");
-		}
+		let imageTexture: WebGLTexture | null = null;
+		let blurredMaskTexture: WebGLTexture | null = null;
+		let backgroundTexture: WebGLTexture | null = null;
 
 		try {
+			imageTexture = this.createTextureFromSource(source);
+			if (!imageTexture) {
+				throw new WebGLError("Failed to create image texture");
+			}
+
+			blurredMaskTexture = this.preprocessMask(mask, width, height);
+
+			backgroundTexture = this.createTextureFromSource(backgroundImageData);
+			if (!backgroundTexture) {
+				throw new WebGLError("Failed to create background texture");
+			}
+
 			const canvas = this.gl.canvas as HTMLCanvasElement;
 			canvas.width = width;
 			canvas.height = height;
@@ -626,7 +981,7 @@ export class WebGLManager {
 			this.gl.clearColor(0, 0, 0, 0);
 			this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
-			this.gl.useProgram(lightWrapProgram);
+			this.gl.useProgram(this.lightWrapProgram);
 
 			const positionLocation = 0; // a_position is bound to location 0
 			this.gl.enableVertexAttribArray(positionLocation);
@@ -640,10 +995,10 @@ export class WebGLManager {
 				0,
 			);
 
-			this.gl.enableVertexAttribArray(texCoordLocation);
+			this.gl.enableVertexAttribArray(this.lightWrapTexCoordLocation);
 			this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.texCoordBuffer);
 			this.gl.vertexAttribPointer(
-				texCoordLocation,
+				this.lightWrapTexCoordLocation,
 				2,
 				this.gl.FLOAT,
 				false,
@@ -651,49 +1006,31 @@ export class WebGLManager {
 				0,
 			);
 
-			this.gl.uniform2f(resolutionLocation, width, height);
+			this.gl.uniform2f(this.lightWrapResolutionLocation, width, height);
 
 			// Image texture to unit 0
 			this.gl.activeTexture(this.gl.TEXTURE0);
 			this.gl.bindTexture(this.gl.TEXTURE_2D, imageTexture);
-			this.gl.uniform1i(imageLocation, 0);
+			this.gl.uniform1i(this.lightWrapImageLocation, 0);
 
 			// Mask texture to unit 1
 			this.gl.activeTexture(this.gl.TEXTURE1);
-			this.gl.bindTexture(this.gl.TEXTURE_2D, maskTexture);
-			this.gl.uniform1i(maskLocation, 1);
+			this.gl.bindTexture(this.gl.TEXTURE_2D, blurredMaskTexture);
+			this.gl.uniform1i(this.lightWrapMaskLocation, 1);
 
 			// Background texture to unit 2
 			this.gl.activeTexture(this.gl.TEXTURE2);
 			this.gl.bindTexture(this.gl.TEXTURE_2D, backgroundTexture);
-			this.gl.uniform1i(backgroundLocation, 2);
+			this.gl.uniform1i(this.lightWrapBackgroundLocation, 2);
 
 			this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
 
-			if (!this.outputCanvas) {
-				throw new WebGLError("Output canvas not initialized");
-			}
-
-			this.outputCanvas.width = width;
-			this.outputCanvas.height = height;
-			const outputCtx = this.outputCanvas.getContext("2d", {
-				willReadFrequently: true,
-			});
-
-			if (!outputCtx) {
-				throw new WebGLError("Failed to create output canvas context");
-			}
-
-			outputCtx.drawImage(canvas, 0, 0);
-			return outputCtx.getImageData(0, 0, width, height);
+			return canvas;
 		} finally {
-			this.gl.deleteTexture(imageTexture);
-			this.gl.deleteTexture(maskTexture);
-			this.gl.deleteTexture(backgroundTexture);
-
-			this.gl.deleteShader(vertexShader);
-			this.gl.deleteShader(fragmentShader);
-			this.gl.deleteProgram(lightWrapProgram);
+			if (imageTexture) this.gl.deleteTexture(imageTexture);
+			if (blurredMaskTexture && !this.maskBlurProgram)
+				this.gl.deleteTexture(blurredMaskTexture);
+			if (backgroundTexture) this.gl.deleteTexture(backgroundTexture);
 		}
 	}
 
@@ -718,6 +1055,14 @@ export class WebGLManager {
 			this.gl.deleteBuffer(this.texCoordBuffer);
 			this.texCoordBuffer = null;
 		}
-		this.outputCanvas = null;
+		if (this.lightWrapProgram) {
+			this.gl.deleteProgram(this.lightWrapProgram);
+			this.lightWrapProgram = null;
+		}
+		if (this.maskBlurProgram) {
+			this.gl.deleteProgram(this.maskBlurProgram);
+			this.maskBlurProgram = null;
+		}
+		this.destroyMaskBlurCache();
 	}
 }

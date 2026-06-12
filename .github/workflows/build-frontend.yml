@@ -43,7 +43,7 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Build
-        run: yarn build
+        run: FORCE_REBUILD=1 yarn build
 
       - name: Commit artifacts
         run: |

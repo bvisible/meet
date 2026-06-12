@@ -4,7 +4,7 @@ test.describe("Reactions and raise hand", () => {
 	test("guest reaction and raised hand are visible to the host", async ({ hostPage, meetingId, createParticipant }) => {
 		const guest = await createParticipant();
 
-		await hostPage.goto(`/meet/${meetingId}?created=true`);
+		await hostPage.goto(`/meet/${meetingId}`);
 		await joinFromPreview(hostPage);
 		await guest.joinAsGuest(meetingId, `Guest Engage ${test.info().parallelIndex}`);
 

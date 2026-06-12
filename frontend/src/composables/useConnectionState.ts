@@ -30,6 +30,7 @@ export const useConnectionState = defineStore("connection", () => {
 	const guestSfuUrl = ref<string | null>(null);
 	const guestSfuPort = ref<string | null>(null);
 	const guestSessionToken = ref<string | null>(null);
+	const justCreated = ref(false);
 
 	function $reset() {
 		connectionError.value = null;
@@ -44,6 +45,7 @@ export const useConnectionState = defineStore("connection", () => {
 		guestSfuUrl.value = null;
 		guestSfuPort.value = null;
 		guestSessionToken.value = null;
+		justCreated.value = false;
 	}
 
 	return {
@@ -59,6 +61,7 @@ export const useConnectionState = defineStore("connection", () => {
 		guestSfuUrl,
 		guestSfuPort,
 		guestSessionToken,
+		justCreated,
 		$reset,
 	};
 });

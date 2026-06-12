@@ -21,7 +21,6 @@
     "frontend": {
       "entry": "src/main.ts",
       "project": ["src/**/*.{ts,vue}", "!src/main.ts"],
-      "ignore": ["src/composables/rnnoise.d.ts"],
       "ignoreUnresolved": ["~icons/lucide/*"]
     },
     "sfu-server": {

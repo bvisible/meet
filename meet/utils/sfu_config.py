@@ -4,8 +4,10 @@
 from urllib.parse import urlparse
 
 import frappe
+from frappe.utils.caching import redis_cache
 
 
+@redis_cache(ttl=5 * 60)
 def get_sfu_config():
 	"""Get SFU configuration from site config or defaults"""
 	return {

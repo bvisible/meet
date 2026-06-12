@@ -95,7 +95,7 @@ async function createMeetingViaUi(
 		await page.getByRole("menuitem", { name: "Create a restricted meeting" }).click();
 	}
 
-	await page.waitForURL(/\/meet\/[a-z0-9-]+(?:\?created=true)?$/);
+	await page.waitForURL(/\/meet\/[a-z0-9-]+$/);
 
 	const url = new URL(page.url());
 	const match = url.pathname.match(/\/meet\/([a-z0-9-]+)$/);
@@ -133,7 +133,7 @@ async function buildParticipant(browser: Browser): Promise<Participant> {
 		async joinAsHost(meetingId: string) {
 			await loginViaApi(context.request);
 			await page.goto("/meet/");
-			await page.goto(`/meet/${meetingId}?created=true`);
+			await page.goto(`/meet/${meetingId}`);
 			await joinFromPreview(page);
 		},
 		async endCall() {

@@ -10,7 +10,7 @@
 					v-if="!session.isLoggedIn"
 					variant="ghost"
 					size="sm"
-					@click="$router.push({ name: 'Login', query: { next: $route.fullPath } })"
+					@click="redirectToLogin"
 				>
 					Sign In
 				</Button>
@@ -110,6 +110,7 @@
 								/>
 
 								<Button
+									v-if="!presenceError"
 									type="submit"
 									variant="solid"
 									size="lg"
@@ -134,21 +135,21 @@
 
 <script setup lang="ts">
 import { Button, createResource, FormControl, toast } from "frappe-ui";
-import {
-	computed,
-	inject,
-	nextTick,
-	onMounted,
-	type Ref,
-	ref,
-	watch,
-} from "vue";
+import { computed, inject, nextTick, onMounted, ref, watch } from "vue";
 import ParticipantAvatarGroup from "../components/ParticipantAvatarGroup.vue";
 import PreviewToolbar from "../components/PreviewToolbar.vue";
 import { useMeetingPreviewPresence } from "../composables/useMeetingPreviewPresence";
 import { session } from "../data/session";
 import FrappeMeetingLogo from "../icons/FrappeMeetingLogo.vue";
+import { getErrorMessage } from "../utils/error";
 import MeetingAvatar from "./MeetingAvatar.vue";
+
+function redirectToLogin() {
+	const path = window.location.pathname.startsWith("/meet")
+		? window.location.pathname
+		: `/meet${window.location.pathname}`;
+	window.location.href = `/login?redirect-to=${encodeURIComponent(path)}`;
+}
 
 interface VideoElement {
 	$el?:
@@ -217,6 +218,10 @@ watch(guestNameInputRef, (inputRef) => {
 });
 
 const handleJoin = async () => {
+	if (presenceError.value) {
+		return;
+	}
+
 	if (joinGuestAPI.loading || props.isConnecting) {
 		return;
 	}
@@ -237,7 +242,9 @@ const handleJoin = async () => {
 			});
 		} catch (error) {
 			console.error("Failed to join as guest:", error);
-			toast.error("Failed to join meeting. Please try again.");
+			const errorMessage =
+				getErrorMessage(error) || "Failed to join meeting as guest.";
+			toast.error(errorMessage);
 		}
 	} else {
 		emit("join-from-preview");

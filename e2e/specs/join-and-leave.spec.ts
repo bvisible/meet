@@ -4,7 +4,7 @@ test.describe("Joining and leaving", () => {
 	test("host can join a new meeting and leave it", async ({ hostPage, createMeetingViaUi }) => {
 		const meetingId = await createMeetingViaUi();
 
-		await hostPage.goto(`/meet/${meetingId}?created=true`);
+		await hostPage.goto(`/meet/${meetingId}`);
 		await joinFromPreview(hostPage);
 
 		await hostPage.getByTestId("toolbar-end-call").click();

@@ -1,14 +1,29 @@
 import { type Ref, ref } from "vue";
 
+function getLocalStorage(): Storage | null {
+	if (
+		typeof localStorage === "undefined" ||
+		typeof localStorage.getItem !== "function" ||
+		typeof localStorage.setItem !== "function"
+	) {
+		return null;
+	}
+	return localStorage;
+}
+
 function readBool(key: string, def = true): boolean {
-	const v = localStorage.getItem(key);
+	const v = getLocalStorage()?.getItem(key) ?? null;
 	if (v === null) return def;
 	return v === "1";
 }
 
 function readString(key: string, def = ""): string {
-	const v = localStorage.getItem(key);
+	const v = getLocalStorage()?.getItem(key) ?? null;
 	return v !== null ? v : def;
+}
+
+function writeString(key: string, value: string): void {
+	getLocalStorage()?.setItem(key, value);
 }
 
 export const micEnabled: Ref<boolean> = ref(readBool("mediaPref.mic", false));
@@ -38,7 +53,7 @@ export const autoHideToolbar: Ref<boolean> = ref(
 
 export function setNoiseCancellationEnabled(val: boolean): void {
 	noiseCancellationEnabled.value = !!val;
-	localStorage.setItem(
+	writeString(
 		"mediaPref.noiseCancellation",
 		noiseCancellationEnabled.value ? "1" : "0",
 	);
@@ -46,7 +61,7 @@ export function setNoiseCancellationEnabled(val: boolean): void {
 
 export function setPushToTalkEnabled(val: boolean): void {
 	pushToTalkEnabled.value = !!val;
-	localStorage.setItem(
+	writeString(
 		"mediaPref.pushToTalk",
 		pushToTalkEnabled.value ? "1" : "0",
 	);
@@ -54,7 +69,7 @@ export function setPushToTalkEnabled(val: boolean): void {
 
 export function setAutoHideToolbar(val: boolean): void {
 	autoHideToolbar.value = !!val;
-	localStorage.setItem(
+	writeString(
 		"mediaPref.autoHideToolbar",
 		autoHideToolbar.value ? "1" : "0",
 	);
@@ -62,27 +77,27 @@ export function setAutoHideToolbar(val: boolean): void {
 
 export function setMicEnabled(val: boolean): void {
 	micEnabled.value = !!val;
-	localStorage.setItem("mediaPref.mic", micEnabled.value ? "1" : "0");
+	writeString("mediaPref.mic", micEnabled.value ? "1" : "0");
 }
 
 export function setCameraEnabled(val: boolean): void {
 	cameraEnabled.value = !!val;
-	localStorage.setItem("mediaPref.camera", cameraEnabled.value ? "1" : "0");
+	writeString("mediaPref.camera", cameraEnabled.value ? "1" : "0");
 }
 
 export function setSelectedCameraId(deviceId: string): void {
 	selectedCameraId.value = deviceId || "";
-	localStorage.setItem("mediaPref.cameraId", selectedCameraId.value);
+	writeString("mediaPref.cameraId", selectedCameraId.value);
 }
 
 export function setSelectedMicId(deviceId: string): void {
 	selectedMicId.value = deviceId || "";
-	localStorage.setItem("mediaPref.micId", selectedMicId.value);
+	writeString("mediaPref.micId", selectedMicId.value);
 }
 
 export function setSelectedSpeakerId(deviceId: string): void {
 	selectedSpeakerId.value = deviceId || "";
-	localStorage.setItem("mediaPref.speakerId", selectedSpeakerId.value);
+	writeString("mediaPref.speakerId", selectedSpeakerId.value);
 }
 
 export function loadMediaPreferences(): void {

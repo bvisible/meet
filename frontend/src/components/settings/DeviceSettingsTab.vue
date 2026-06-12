@@ -37,7 +37,7 @@
 
 					<div v-if="selectedMicIdLocal" class="w-5">
 						<AudioIndicator class="mt-2" :device-id="getDeviceId(selectedMicIdLocal)" :is-active="true" :sensitivity="2"
-							:max-height="40" />
+							:max-height="40" activeColorClass="bg-gray-800" />
 					</div>
 				</div>
 

@@ -22,6 +22,14 @@ import type { CurrentUser } from "./useCurrentUser";
 import type { MediaState } from "./useMediaState";
 import type { RaiseHandStore } from "./useRaiseHandStore";
 
+const BLUETOOTH_DEVICE_LABEL_REGEX =
+	/airpods|bluetooth|\bbt\b|wireless|jbl|bose|sony|beats|sennheiser|akg|jabra|anker|skullcandy|shure|bang\s*&\s*olufsen|b\s*&\s*o|marley|skullcandy|logitech\s*bt|plantronics|poly|razer\s*(?:bt|opus)|corsair|steelseries|hyperx|audeze|sennheiser|soundcore|tozo|earfun|earbuds|earbud/i;
+
+const isBluetoothMicLabel = (label: string | undefined): boolean => {
+	if (!label) return false;
+	return BLUETOOTH_DEVICE_LABEL_REGEX.test(label.toLowerCase());
+};
+
 function getBackgroundEffectsFromStorage() {
 	const blurEnabled = localStorage.getItem("backgroundEffects.blur") === "1";
 	const imageEnabled = localStorage.getItem("backgroundEffects.image") === "1";
@@ -104,6 +112,7 @@ interface MediaControlsAPI {
 	toggleMicrophone: () => Promise<void>;
 	toggleCamera: () => Promise<void>;
 	toggleScreenShare: () => Promise<void>;
+	switchInputDevice: (type: DeviceType, deviceId: string) => Promise<void>;
 	applySpeakerDevice: () => Promise<void>;
 	applyBackgroundEffectsToLocalStream: () => Promise<void>;
 	setLocalVideoRef: (el: HTMLElement | null) => void;
@@ -228,7 +237,7 @@ export function useMediaControls(deps: MediaControlsDeps): MediaControlsAPI {
 		}
 	};
 
-	const applyBackgroundEffectsToLocalStream = async () => {
+	const applyBackgroundEffectsToLocalStream = async (forceRestart = false) => {
 		const bgEffects = getBackgroundEffectsFromStorage();
 		const wantsEffects = bgEffects.anyEnabled;
 		const localStream = mediaState.localStream;
@@ -254,7 +263,7 @@ export function useMediaControls(deps: MediaControlsDeps): MediaControlsAPI {
 		shouldApplyBackgroundEffectsWhenVideoAvailable = false;
 
 		try {
-			if (backgroundSession) {
+			if (backgroundSession && !forceRestart) {
 				await backgroundSession.updateOptions({
 					blurIntensity: bgEffects.blurIntensity,
 					backgroundBlurEnabled: bgEffects.blurEnabled,
@@ -262,6 +271,15 @@ export function useMediaControls(deps: MediaControlsDeps): MediaControlsAPI {
 					selectedBackgroundImage: bgEffects.selectedImage,
 				});
 				return;
+			}
+
+			if (backgroundSession) {
+				backgroundSession.cleanup();
+				backgroundSession = null;
+			}
+			if (mediaState.processedStream) {
+				backgroundEffects.stopProcessing();
+				mediaState.processedStream = null;
 			}
 
 			const result = await backgroundEffects.applyBackgroundEffects(
@@ -290,6 +308,126 @@ export function useMediaControls(deps: MediaControlsDeps): MediaControlsAPI {
 				mediaState.processedStream = null;
 				backgroundEffects.stopProcessing();
 			}
+		}
+	};
+
+	const switchSpeaker = async (deviceId: string) => {
+		setSelectedSpeakerId(deviceId);
+		await applySpeakerDevice();
+	};
+
+	const switchMic = async (deviceId: string) => {
+		setSelectedMicId(deviceId);
+		if (!mediaState.isMicOn || !mediaState.localStream) {
+			return;
+		}
+
+		const mh = getMediaHandler(sfuManager.value);
+		const { stream: audioOnlyStream } = await acquireUserMedia(false, true, {
+			micDeviceId: deviceId,
+		});
+		const newAudioTrack = audioOnlyStream.getAudioTracks()[0];
+		if (!newAudioTrack) {
+			return;
+		}
+
+		const currentAudioTracks = mediaState.localStream.getAudioTracks();
+		for (const track of currentAudioTracks) {
+			mediaState.localStream.removeTrack(track);
+			track.stop();
+		}
+		mediaState.localStream.addTrack(newAudioTrack);
+
+		if (noiseCancellationSession) {
+			noiseCancellationSession.cleanup();
+			noiseCancellationSession = null;
+		}
+
+		const trackToPublish = await getProcessedAudioTrack(mediaState.localStream);
+		if (!trackToPublish || trackToPublish.readyState !== "live") {
+			return;
+		}
+
+		if (
+			mh?.audioProducer &&
+			typeof mh.audioProducer.replaceTrack === "function"
+		) {
+			await mh.audioProducer.replaceTrack({ track: trackToPublish });
+			return;
+		}
+
+		if (!mh?.audioProducer && sfuManager.value?.transportManager) {
+			const producer = await sfuManager.value.transportManager.createProducer(
+				trackToPublish,
+				{ type: "microphone" },
+			);
+			mh?.setProducers({ audioProducer: producer as ProducerLike });
+		}
+	};
+
+	const switchCam = async (deviceId: string) => {
+		setSelectedCameraId(deviceId);
+		if (!mediaState.isCameraOn || !mediaState.localStream) {
+			return;
+		}
+
+		const mh = getMediaHandler(sfuManager.value);
+		const { stream: videoOnlyStream } = await acquireUserMedia(true, false, {
+			cameraDeviceId: deviceId,
+		});
+		const newVideoTrack = videoOnlyStream.getVideoTracks()[0];
+		if (!newVideoTrack) {
+			return;
+		}
+
+		const currentVideoTracks = mediaState.localStream.getVideoTracks();
+		for (const track of currentVideoTracks) {
+			mediaState.localStream.removeTrack(track);
+			track.stop();
+		}
+		mediaState.localStream.addTrack(newVideoTrack);
+
+		const bgEffects = getBackgroundEffectsFromStorage();
+		if (
+			bgEffects.anyEnabled ||
+			shouldApplyBackgroundEffectsWhenVideoAvailable
+		) {
+			await applyBackgroundEffectsToLocalStream(true);
+		}
+
+		const trackToPublish = mediaState.processedStream
+			? mediaState.processedStream.getVideoTracks()[0]
+			: newVideoTrack;
+
+		if (trackToPublish && mh?.videoProducer) {
+			if (typeof mh.videoProducer.replaceTrack === "function") {
+				await mh.videoProducer.replaceTrack({ track: trackToPublish });
+			}
+		} else if (
+			trackToPublish &&
+			!mh?.videoProducer &&
+			sfuManager.value?.transportManager
+		) {
+			const producer = await sfuManager.value.transportManager.createProducer(
+				trackToPublish,
+				{ type: "camera" },
+			);
+			mh?.setProducers({ videoProducer: producer as ProducerLike });
+		}
+
+		if (localVideo.value) {
+			delete localVideo.value.dataset.sourceStreamId;
+			setLocalVideoRef(localVideo.value);
+		}
+	};
+
+	const switchInputDevice = async (type: DeviceType, deviceId: string) => {
+		if (type === "speaker") {
+			await switchSpeaker(deviceId);
+		} else if (type === "microphone") {
+			await switchMic(deviceId);
+		} else if (type === "camera") {
+			await switchCam(deviceId);
 		}
 	};
 
@@ -417,7 +555,7 @@ export function useMediaControls(deps: MediaControlsDeps): MediaControlsAPI {
 			echoCancellation: true,
 			noiseSuppression: true,
 			autoGainControl: true,
-			sampleRate: 48000,
+			sampleRate: 16000,
 			sampleSize: 16,
 		};
 
@@ -440,12 +578,18 @@ export function useMediaControls(deps: MediaControlsDeps): MediaControlsAPI {
 		}
 
 		if (audioEnabled) {
-			constraints.audio = { ...audioConstraints };
-
 			const validMicId = await getValidDeviceId(
 				selectedMicId.value,
 				"microphone",
 			);
+			const selectedMic = validMicId
+				? deviceManager.findDeviceById(validMicId, "microphone")
+				: undefined;
+			if (isBluetoothMicLabel(selectedMic?.label)) {
+				audioConstraints.autoGainControl = false;
+			}
+			constraints.audio = { ...audioConstraints };
+
 			if (validMicId) {
 				(constraints.audio as Record<string, unknown>).deviceId = {
 					exact: validMicId,
@@ -537,6 +681,24 @@ export function useMediaControls(deps: MediaControlsDeps): MediaControlsAPI {
 				}
 				if (mediaState.isMicOn) {
 					mediaState.microphonePermissionGranted = true;
+					if (prefNoiseCancellationEnabled.value) {
+						try {
+							const rawTrack = stream.getAudioTracks()[0];
+							if (rawTrack) {
+								const audioStream = new MediaStream([rawTrack]);
+								const result =
+									await noiseCancellation.applyNoiseCancellation(audioStream);
+								noiseCancellationSession = result;
+								const processedTrack = result.stream.getAudioTracks()[0];
+								if (processedTrack?.readyState === "live") {
+									stream.removeTrack(rawTrack);
+									stream.addTrack(processedTrack);
+								}
+							}
+						} catch (err) {
+							console.error("[NC] Failed to apply on initial join:", err);
+						}
+					}
 				}
 			}
 		} catch (error) {
@@ -1156,11 +1318,24 @@ export function useMediaControls(deps: MediaControlsDeps): MediaControlsAPI {
 	);
 
 	// Watch processed stream changes and update producer track
-	watch(mediaState.processedStream, async (newStream) => {
-		const reason = newStream
-			? "processed-stream-change"
-			: "processed-stream-removed";
-		await replacePublishedVideoTrack(newStream, reason);
+	watch(
+		() => mediaState.processedStream,
+		async (newStream) => {
+			const reason = newStream
+				? "processed-stream-change"
+				: "processed-stream-removed";
+			await replacePublishedVideoTrack(newStream, reason);
+		},
+	);
+
+	// Surface DTLN init failures as a non-blocking warning. The mic keeps
+	// working on the raw track; this just tells the user why denoising is off.
+	watch(noiseCancellation.error, (message) => {
+		if (message) {
+			toast.warning(
+				`Noise cancellation unavailable: ${message}. Falling back to raw microphone.`,
+			);
+		}
 	});
 
 	onUnmounted(() => {
@@ -1194,6 +1369,7 @@ export function useMediaControls(deps: MediaControlsDeps): MediaControlsAPI {
 		toggleMicrophone,
 		toggleCamera,
 		toggleScreenShare,
+		switchInputDevice,
 		applySpeakerDevice,
 		applyBackgroundEffectsToLocalStream,
 		setLocalVideoRef,

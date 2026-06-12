@@ -1,6 +1,5 @@
 import { createResource } from "frappe-ui";
 import { computed, reactive } from "vue";
-import router from "@/router";
 import { userResource } from "./user";
 
 interface LoginParams {
@@ -35,7 +34,7 @@ export const session = reactive({
 				sessionUser: sessionUser(),
 				...userResource.data,
 			}));
-			router.replace({ name: "Login" });
+			window.location.href = "/login";
 		},
 	}),
 	user: computed(() => ({

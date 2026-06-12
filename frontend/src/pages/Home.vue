@@ -92,9 +92,11 @@ import {
 } from "frappe-ui";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
+import { useConnectionState } from "../composables/useConnectionState";
 import FrappeMeetingLogo from "../icons/FrappeMeetingLogo.vue";
 
 const router = useRouter();
+const connectionState = useConnectionState();
 const meetingCode = ref("");
 const meetingCodeError = ref("");
 
@@ -105,8 +107,8 @@ const createMeeting = createResource({
 		router.push({
 			name: "Meeting",
 			params: { meetingId: meeting_code },
-			query: { created: "true" },
 		});
+		connectionState.justCreated = true;
 	},
 	onError: (error) => {
 		console.error("Error creating meeting:", error);

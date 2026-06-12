@@ -49,7 +49,7 @@
 
 		<!-- Main meeting interface -->
 		<template v-else>
-			<div class="relative flex flex-1 min-h-0">
+			<div class="relative flex flex-1 min-h-0 overflow-hidden">
 				<div
 					class="grid flex-1 min-h-0 transition-[grid-template-columns] duration-300 ease-out relative"
 					:style="{
@@ -99,6 +99,9 @@
 									(currentUser.currentUser.value?.name as string) ||
 									'You'
 								"
+								:isHost="isCurrentUserHost"
+								:isCohost="isCurrentUserCohost"
+                                :hostOnlyChat="chatStore.hostOnlyChat"
 								@close="toggleChat"
 								@send="chat.onSendChat"
 							/>
@@ -265,6 +268,7 @@ const {
 	meetingTitle,
 	meetingOwner,
 	isCurrentUserHost,
+	isCurrentUserCohost,
 	meetingCoHosts,
 } = useMeetingDoc();
 const meetingDoc = getMeetingDoc(meetingId.value);
@@ -412,6 +416,8 @@ const lobby = useLobby({
 	lobbyStore,
 	meetingId: meetingId.value as string,
 });
+
+type AccessData = { allow_guest?: boolean; host_only_chat?: boolean };
 
 // --- Keyboard Shortcuts ---
 const keyboardShortcuts = useKeyboardShortcuts({
@@ -607,6 +613,9 @@ const setSinkIdOnVideoElements = async (sinkId: string) => {
 
 // --- Lifecycle ---
 onMounted(async () => {
+	// get wasJustCreated before resetting stores else it'll be reset to false
+	const wasJustCreated = connectionState.justCreated;
+
 	// Reset all stores
 	connectionState.$reset();
 	mediaState.$reset();
@@ -638,11 +647,12 @@ onMounted(async () => {
 				},
 			});
 
+			if ((accessData as AccessData).host_only_chat !== undefined) {
+				chatStore.hostOnlyChat = !!(accessData as AccessData).host_only_chat;
+			}
 			if (!(accessData as { allow_guest?: boolean }).allow_guest) {
-				router.push({
-					name: "Login",
-					query: { next: `/${meetingId.value}` },
-				});
+				const loginUrl = `/login?redirect-to=${encodeURIComponent(`/meet/${meetingId.value}`)}`;
+				window.location.href = loginUrl;
 				return;
 			}
 		} catch (error) {
@@ -683,8 +693,8 @@ onMounted(async () => {
 	}
 
 	// Auto-join if just created
-	const wasJustCreated = route.query.created === "true";
 	if (wasJustCreated) {
+		connectionState.justCreated = false;
 		await joinMeetingFromPreview();
 	}
 });
@@ -697,22 +707,28 @@ onUnmounted(() => {
 
 // Watch for localVideo element and localStream connection
 watch(
-	[() => mediaState.localVideo, () => mediaState.localStream],
-	async ([videoElement, stream]) => {
+	[
+		() => mediaState.localVideo,
+		() => mediaState.localStream,
+		() => mediaState.processedStream,
+	],
+	async ([videoElement, stream, _processedStream]) => {
 		if (videoElement && stream) {
 			try {
-				const currentStreamId = stream.id;
+				// Prefer processed stream (with background effects) over raw local stream
+				const streamToUse = mediaState.processedStream || stream;
+				const currentStreamId = streamToUse.id;
 				const trackedStreamId = (videoElement as HTMLElement).dataset
 					?.sourceStreamId;
 
 				if (trackedStreamId !== currentStreamId) {
-					const videoTracks = stream.getVideoTracks();
+					const videoTracks = streamToUse.getVideoTracks();
 					if (videoTracks.length > 0) {
 						(videoElement as HTMLVideoElement).srcObject = new MediaStream(
 							videoTracks,
 						);
 					} else {
-						(videoElement as HTMLVideoElement).srcObject = stream;
+						(videoElement as HTMLVideoElement).srcObject = streamToUse;
 					}
 					(videoElement as HTMLElement).dataset.sourceStreamId =
 						currentStreamId;
@@ -764,5 +780,18 @@ watch(
 		}
 	},
 	{ immediate: true },
+);
+
+watch(
+	() => chatStore.hostOnlyChat,
+	(isRestricted, oldValue) => {
+		if (
+			isRestricted !== oldValue &&
+			(isCurrentUserHost.value || isCurrentUserCohost.value) &&
+			sfuConnection.sfuClient?.isConnected()
+		) {
+			chat.toggleRestriction(isRestricted);
+		}
+	},
 );
 </script>

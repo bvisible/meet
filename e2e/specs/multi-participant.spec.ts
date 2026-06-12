@@ -5,7 +5,7 @@ test.describe("Multi participant", () => {
 		const guestOne = await createParticipant();
 		const guestTwo = await createParticipant();
 
-		await hostPage.goto(`/meet/${meetingId}?created=true`);
+		await hostPage.goto(`/meet/${meetingId}`);
 		await joinFromPreview(hostPage);
 		await guestOne.joinAsGuest(meetingId, `Guest One ${test.info().parallelIndex}`);
 		await guestTwo.joinAsGuest(meetingId, `Guest Two ${test.info().parallelIndex}`);

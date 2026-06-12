@@ -6,6 +6,7 @@ import re
 
 import frappe
 from frappe.core.doctype.user.user import User
+from frappe.utils.caching import redis_cache
 
 
 def unique_users(user_list: list) -> list[dict]:
@@ -53,6 +54,7 @@ def is_guest_user(user_id: str) -> bool:
 	return user_id.startswith("guest_")
 
 
+@redis_cache(ttl=5 * 60)
 def get_user_info(user_id: str) -> dict | None:
 	"""
 	Get user information for both authenticated users and guests.

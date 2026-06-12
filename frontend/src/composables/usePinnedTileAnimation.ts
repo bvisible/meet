@@ -1,10 +1,10 @@
 import { nextTick, onUnmounted, type Ref, ref, watch } from "vue";
-import type { PinnedTile } from "./useLayout";
+import type { PinnedTile } from "./useGridLayout";
 
 interface UsePinnedTileAnimationOptions {
 	container: Ref<HTMLElement | null>;
-	pinnedPanel: Ref<HTMLElement | null>;
-	pinnedTile: Ref<PinnedTile | null>;
+	pinnedPanelsMap: Ref<Record<string, HTMLElement>>;
+	pinnedTiles: Ref<PinnedTile[]>;
 	visibleTileCount: Ref<number>;
 }
 
@@ -12,12 +12,12 @@ type TileStyle = Record<string, string | number>;
 
 export function usePinnedTileAnimation({
 	container,
-	pinnedPanel,
-	pinnedTile,
+	pinnedPanelsMap,
+	pinnedTiles,
 	visibleTileCount,
 }: UsePinnedTileAnimationOptions) {
 	const isFlipAnimating = ref(false);
-	const pinnedTileStyle = ref<TileStyle>({});
+	const pinnedTileStyles = ref<Record<string, TileStyle>>({});
 
 	let flipCleanupTimer: ReturnType<typeof setTimeout> | null = null;
 	let activeAnimations: Animation[] = [];
@@ -31,20 +31,31 @@ export function usePinnedTileAnimation({
 		});
 
 	const measurePinnedTileStyle = () => {
-		if (!pinnedPanel.value || !container.value || !pinnedTile.value) {
-			pinnedTileStyle.value = {};
+		const panels = Object.values(pinnedPanelsMap.value);
+		if (!panels.length || !container.value || !pinnedTiles.value.length) {
+			pinnedTileStyles.value = {};
 			return;
 		}
 
-		const panelRect = pinnedPanel.value.getBoundingClientRect();
 		const containerRect = container.value.getBoundingClientRect();
-		pinnedTileStyle.value = {
-			position: "absolute",
-			top: `${panelRect.top - containerRect.top}px`,
-			left: `${panelRect.left - containerRect.left}px`,
-			width: `${panelRect.width}px`,
-			height: `${panelRect.height}px`,
-		};
+		const newStyles: Record<string, TileStyle> = {};
+
+		pinnedTiles.value.forEach((tile) => {
+			const key = `${tile.type}-${tile.id}`;
+			const panel = pinnedPanelsMap.value[key];
+			if (!panel) return;
+
+			const panelRect = panel.getBoundingClientRect();
+			newStyles[key] = {
+				position: "absolute",
+				top: `${panelRect.top - containerRect.top}px`,
+				left: `${panelRect.left - containerRect.left}px`,
+				width: `${panelRect.width}px`,
+				height: `${panelRect.height}px`,
+			};
+		});
+
+		pinnedTileStyles.value = newStyles;
 	};
 
 	const queuePinnedTileMeasurement = () => {
@@ -165,8 +176,8 @@ export function usePinnedTileAnimation({
 	};
 
 	watch(
-		[pinnedPanel, container, pinnedTile],
-		([panelEl, containerEl]) => {
+		[pinnedTiles, container],
+		() => {
 			if (resizeObserver) {
 				resizeObserver.disconnect();
 				resizeObserver = null;
@@ -174,17 +185,23 @@ export function usePinnedTileAnimation({
 
 			queuePinnedTileMeasurement();
 
-			if (panelEl || containerEl) {
+			const panels = Object.values(pinnedPanelsMap.value);
+
+			if (panels.length || container.value) {
 				resizeObserver = new ResizeObserver(() => {
 					queuePinnedTileMeasurement();
 				});
-				if (panelEl) resizeObserver.observe(panelEl);
-				if (containerEl && containerEl !== panelEl) {
-					resizeObserver.observe(containerEl);
+
+				panels.forEach((panel) => {
+					if (panel) resizeObserver!.observe(panel);
+				});
+
+				if (container.value) {
+					resizeObserver.observe(container.value);
 				}
 			}
 		},
-		{ immediate: true },
+		{ immediate: true, deep: true, flush: "post" },
 	);
 
 	watch(visibleTileCount, () => {
@@ -192,13 +209,9 @@ export function usePinnedTileAnimation({
 	});
 
 	watch(
-		pinnedTile,
+		() => [...pinnedTiles.value],
 		async (nextPinned, prevPinned) => {
-			if (!prevPinned && !nextPinned) return;
-			if (
-				prevPinned?.id === nextPinned?.id &&
-				prevPinned?.type === nextPinned?.type
-			) {
+			if (JSON.stringify(nextPinned) === JSON.stringify(prevPinned)) {
 				return;
 			}
 
@@ -242,6 +255,6 @@ export function usePinnedTileAnimation({
 
 	return {
 		isFlipAnimating,
-		pinnedTileStyle,
+		pinnedTileStyles,
 	};
 }

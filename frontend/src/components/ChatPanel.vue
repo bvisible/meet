@@ -42,24 +42,29 @@
 				</div>
 
 				<form class="p-2 relative" @submit.prevent="handleSend">
-					<div class="flex gap-2">
-						<FormControl
-							size="md"
-							v-model="draft"
-							@keydown="handleKeydown"
-							placeholder="Type a message"
-							class="flex-1"
-							autocomplete="off"
-							data-testid="chat-input"
+					<template v-if="canSendMessages">
+						<div class="flex gap-2">
+							<FormControl
+								size="md"
+								v-model="draft"
+								@keydown="handleKeydown"
+								placeholder="Type a message"
+								class="flex-1"
+								autocomplete="off"
+								data-testid="chat-input"
+							/>
+							<Button size="md" type="submit" variant="outline" data-testid="chat-send"> Send </Button>
+						</div>
+						<EmojiPicker
+							:show="showEmojiPicker"
+							:filtered-emojis="filteredEmojis"
+							:selected-index="selectedEmojiIndex"
+							@select="addEmoji"
 						/>
-						<Button size="md" type="submit" variant="outline" data-testid="chat-send"> Send </Button>
+					</template>
+					<div v-else class="text-center text-sm text-gray-500 py-3 bg-gray-50 rounded border border-gray-200 m-2">
+						The host has restricted chat to hosts and co-hosts only.
 					</div>
-					<EmojiPicker
-						:show="showEmojiPicker"
-						:filtered-emojis="filteredEmojis"
-						:selected-index="selectedEmojiIndex"
-						@select="addEmoji"
-					/>
 				</form>
 			</div>
 		</div>
@@ -105,6 +110,9 @@ const props = defineProps<{
 	userId?: string;
 	userName?: string;
 	messages?: ChatMessage[] | { value: ChatMessage[] };
+	isHost?: boolean;
+	isCohost?: boolean;
+	hostOnlyChat?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -119,6 +127,11 @@ const draft = ref("");
 const selectedEmojiIndex = ref(0);
 const filteredEmojis = ref<EmojiItem[]>([]);
 const isEmojiDataReady = ref(false);
+
+const canSendMessages = computed(() => {
+	if (!props.hostOnlyChat) return true;
+	return props.isHost || props.isCohost;
+});
 
 const defaultEmojis: EmojiItem[] = [
 	{ emoji: "😀", keywords: ["smile"] },
@@ -333,6 +346,7 @@ function handleSend() {
 		return;
 	}
 	const text = draft.value.trim();
+	if (!canSendMessages.value) return;
 	if (!text) return;
 	emit("send", text);
 	draft.value = "";

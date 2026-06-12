@@ -7,6 +7,7 @@ import type { CurrentUser } from "./useCurrentUser";
 interface ChatAPI {
 	setupChatEvents: (notificationQueue: unknown) => void;
 	onSendChat: (text: string) => void;
+	toggleRestriction: (enabled: boolean) => void;
 }
 
 export function useChat(deps: {
@@ -49,6 +50,22 @@ export function useChat(deps: {
 				audioNotificationManager.playChatNotification();
 			}
 		});
+		sfuClient.on("chat:restriction_updated", (data: any) => {
+			chatStore.hostOnlyChat = data.enabled;
+		});
+
+		sfuClient.on("sfu_error", (data: any) => {
+			if (data?.code === "HOST_ONLY_CHAT") {
+				toast.error("The host has restricted chat to hosts and co-hosts only.");
+				chatStore.hostOnlyChat = true;
+			}
+		});
+	};
+
+	const toggleRestriction = (enabled: boolean) => {
+		if (sfuClient.isConnected()) {
+			sfuClient.sendEvent("chat:toggle_restriction", { enabled });
+		}
 	};
 
 	const onSendChat = (text: string) => {
@@ -78,6 +95,7 @@ export function useChat(deps: {
 
 	return {
 		setupChatEvents,
+		toggleRestriction,
 		onSendChat,
 	};
 }

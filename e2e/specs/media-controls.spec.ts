@@ -4,7 +4,7 @@ test.describe("Media controls", () => {
 	test("camera and microphone toggles are reflected remotely", async ({ hostPage, meetingId, createParticipant }) => {
 		const guest = await createParticipant();
 
-		await hostPage.goto(`/meet/${meetingId}?created=true`);
+		await hostPage.goto(`/meet/${meetingId}`);
 		await joinFromPreview(hostPage);
 		await guest.joinAsGuest(meetingId, `Guest Media ${test.info().parallelIndex}`);
 
@@ -20,7 +20,7 @@ test.describe("Media controls", () => {
 	test("screen sharing creates a dedicated remote tile", async ({ hostPage, meetingId, createParticipant }) => {
 		const guest = await createParticipant();
 
-		await hostPage.goto(`/meet/${meetingId}?created=true`);
+		await hostPage.goto(`/meet/${meetingId}`);
 		await joinFromPreview(hostPage);
 		await guest.joinAsGuest(meetingId, `Guest Screen ${test.info().parallelIndex}`);
 

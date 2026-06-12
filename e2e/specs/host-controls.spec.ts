@@ -5,7 +5,7 @@ test.describe("Host controls", () => {
 		const guest = await createParticipant();
 		const guestName = `Guest Mute ${test.info().parallelIndex}`;
 
-		await hostPage.goto(`/meet/${meetingId}?created=true`);
+		await hostPage.goto(`/meet/${meetingId}`);
 		await joinFromPreview(hostPage);
 		await guest.joinAsGuest(meetingId, guestName);
 
@@ -28,7 +28,7 @@ test.describe("Host controls", () => {
 		const guest = await createParticipant();
 		const guestName = `Guest Remove ${test.info().parallelIndex}`;
 
-		await hostPage.goto(`/meet/${meetingId}?created=true`);
+		await hostPage.goto(`/meet/${meetingId}`);
 		await joinFromPreview(hostPage);
 		await guest.joinAsGuest(meetingId, guestName);
 

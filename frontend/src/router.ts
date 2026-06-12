@@ -21,11 +21,6 @@ const routes: RouteRecordRaw[] = [
 		component: () => import("@/pages/Meeting.vue"),
 		meta: { allowGuest: true },
 	},
-	{
-		name: "Login",
-		path: "/login",
-		component: () => import("@/pages/Login.vue"),
-	},
 ];
 
 declare const __FRONTEND_ROUTE__: string;
@@ -34,6 +29,11 @@ const router = createRouter({
 	history: createWebHistory(`${__FRONTEND_ROUTE__}/`),
 	routes,
 });
+
+function redirectToExternalLogin(nextPath?: string) {
+	const loginUrl = `/login${nextPath ? `?redirect-to=${encodeURIComponent(nextPath)}` : ""}`;
+	window.location.href = loginUrl;
+}
 
 router.beforeEach(async (to, _from, next) => {
 	let isLoggedIn = session.isLoggedIn;
@@ -51,7 +51,8 @@ router.beforeEach(async (to, _from, next) => {
 
 	if (to.meta?.requiresAdmin) {
 		if (!isLoggedIn) {
-			return next({ name: "Login", query: { next: to.fullPath } });
+			redirectToExternalLogin(to.fullPath);
+			return;
 		}
 		const isAdmin = (user?.roles as string[])?.some((r) =>
 			["System Manager", "Administrator"].includes(r),
@@ -61,21 +62,14 @@ router.beforeEach(async (to, _from, next) => {
 		}
 	}
 
-	if (to.name === "Login") {
-		if (isLoggedIn) return next({ name: "Home" });
-		return next();
-	}
-
 	if (to.meta?.allowGuest && to.name === "Meeting") {
 		return next();
 	}
 
 	if (!isLoggedIn) {
-		const query: Record<string, string> = {};
-		if (to.name !== "Home") {
-			query.next = to.fullPath;
-		}
-		return next({ name: "Login", query });
+		const nextPath = to.name !== "Home" ? to.fullPath : undefined;
+		redirectToExternalLogin(nextPath);
+		return;
 	}
 
 	next();

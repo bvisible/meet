@@ -1,5 +1,6 @@
 import path from "node:path";
 import vue from "@vitejs/plugin-vue";
+import { noiseSuppressionAudioWorkletVitePlugin } from "@workadventure/noise-suppression/vite";
 import frappeui from "frappe-ui/vite";
 import { defineConfig } from "vite";
 
@@ -13,6 +14,7 @@ export default defineConfig({
 			},
 		}),
 		vue(),
+		noiseSuppressionAudioWorkletVitePlugin(),
 	],
 	build: {
 		chunkSizeWarningLimit: 1500,

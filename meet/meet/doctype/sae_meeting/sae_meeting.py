@@ -377,10 +377,16 @@ class SaeMeeting(Document):
 			frappe.throw(_("Guest is banned from this meeting"))
 
 	@frappe.whitelist()
-	def update_settings(self, allow_guest: int | None = None, meeting_type: str | None = None) -> None:
+	def update_settings(
+		self,
+		allow_guest: int | None = None,
+		meeting_type: str | None = None,
+		host_only_chat: int | None = None,
+	) -> None:
 		"""
 		Update meeting settings (host or co-host only)
 		"""
+
 		if not self.is_host_or_cohost(frappe.session.user):
 			frappe.throw(_("Only the meeting host or co-host can update settings"))
 
@@ -397,6 +403,10 @@ class SaeMeeting(Document):
 				frappe.throw(_("Invalid meeting type"))
 			self.meeting_type = meeting_type
 			updated_fields["meeting_type"] = self.meeting_type
+
+		if host_only_chat is not None:
+			self.host_only_chat = bool(host_only_chat)
+			updated_fields["host_only_chat"] = self.host_only_chat
 
 		if updated_fields:
 			self.save()

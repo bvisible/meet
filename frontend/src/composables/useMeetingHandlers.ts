@@ -22,11 +22,10 @@ interface LobbyActions {
 interface MediaControlsActions {
 	initializeCamera: () => Promise<void>;
 	applySpeakerDevice: () => Promise<void>;
-	acquireUserMedia: (
-		camera: boolean,
-		mic: boolean,
-		options?: { cameraDeviceId?: string; micDeviceId?: string },
-	) => Promise<{ stream: MediaStream }>;
+	switchInputDevice: (
+		type: "camera" | "microphone" | "speaker",
+		deviceId: string,
+	) => Promise<void>;
 }
 
 interface ProducerLike {
@@ -314,59 +313,17 @@ export function useMeetingHandlers(deps: MeetingHandlersDeps) {
 	};
 
 	const handleDeviceChanged = async (event: Record<string, unknown>) => {
-		if (event.type === "speaker") {
-			await deps.mediaControls.applySpeakerDevice();
+		if (typeof event.type !== "string" || typeof event.deviceId !== "string") {
 			return;
 		}
 
-		if (deps.mediaState.isCameraOn || deps.mediaState.isMicOn) {
-			try {
-				const oldStream = deps.mediaState.localStream;
-				if (oldStream) {
-					for (const track of oldStream.getTracks()) {
-						track.stop();
-					}
-				}
-
-				const { selectedCameraId, selectedMicId } = await import(
-					"../data/mediaPreferences"
-				);
-				const cameraDeviceId =
-					event.type === "camera"
-						? (event.deviceId as string)
-						: selectedCameraId.value;
-				const micDeviceId =
-					event.type === "microphone"
-						? (event.deviceId as string)
-						: selectedMicId.value;
-
-				const { stream: newStream } = await deps.mediaControls.acquireUserMedia(
-					deps.mediaState.isCameraOn,
-					deps.mediaState.isMicOn,
-					{ cameraDeviceId, micDeviceId },
-				);
-				deps.mediaState.localStream = newStream;
-
-				if (deps.mediaState.localVideo) {
-					(deps.mediaState.localVideo as HTMLVideoElement).srcObject =
-						newStream;
-				}
-
-				if (deps.sfuConnection.sfuManager.value?.mediaHandler) {
-					const mh = deps.sfuConnection.sfuManager.value.mediaHandler;
-					const audioTrack = newStream.getAudioTracks()[0];
-					const videoTrack = newStream.getVideoTracks()[0];
-
-					if (mh.audioProducer && audioTrack) {
-						await mh.audioProducer.replaceTrack({ track: audioTrack });
-					}
-					if (mh.videoProducer && videoTrack) {
-						await mh.videoProducer.replaceTrack({ track: videoTrack });
-					}
-				}
-			} catch (error) {
-				console.error("Failed to update media with new device:", error);
-			}
+		try {
+			await deps.mediaControls.switchInputDevice(
+				event.type as "camera" | "microphone" | "speaker",
+				event.deviceId,
+			);
+		} catch (error) {
+			console.error("Failed to update media with new device:", error);
 		}
 	};
 

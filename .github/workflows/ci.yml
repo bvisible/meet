@@ -11,10 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  tests:
+  server:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
     name: Server
 
     services:
@@ -105,3 +103,28 @@ jobs:
           bench --site test_site run-tests --app meet
         env:
           TYPE: server
+
+  frontend:
+    runs-on: ubuntu-latest
+    name: Frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "yarn"
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Lint
+        working-directory: frontend
+        run: yarn lint
+
+      - name: Test
+        working-directory: frontend
+        run: yarn test
