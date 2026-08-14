@@ -42,7 +42,20 @@ def assign_meet_role(user: User, method: str) -> None:
 		return
 
 	if not frappe.db.exists("Role", role_name):
-		frappe.get_doc({"doctype": "Role", "role_name": role_name}).insert(ignore_permissions=True)
+		#//// Neoffice — create the role with desk_access=0 explicitly. The Role field
+		#//// defaults to 1, so this fallback minted a desk role; frappe's
+		#//// User.set_system_user() then promotes every account this hook touches to
+		#//// System User, and each one consumes a paid licence seat (WI-00353).
+		#//// fixtures/role.json already pins desk_access=0, so the window is only
+		#//// between a missing role and the next migrate — but that window covers
+		#//// every signup made in it. Keep it aligned with the fixture.
+		#//// Do NOT filter on user_type here: "Meet User" is what lets a portal user
+		#//// create and host a meeting (DocPerm on Sae Meeting, and the apps-screen
+		#//// gate in api/permission.py). Public links are unaffected either way —
+		#//// join_meeting_as_guest is allow_guest and needs no account at all.
+		frappe.get_doc({"doctype": "Role", "role_name": role_name, "desk_access": 0}).insert(
+			ignore_permissions=True
+		)
 
 	user_doc = frappe.get_doc("User", user_name)
 	user_doc.append("roles", {"role": role_name})
