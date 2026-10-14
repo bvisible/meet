@@ -1,3 +1,4 @@
+import type * as mediasoup from 'mediasoup';
 import type {
 	AppData,
 	CloseProducerResult,
@@ -48,6 +49,16 @@ export class MediasoupManager {
 			lastOverallQuality?: 'good' | 'poor' | 'critical';
 		}
 	>();
+
+	// //// Neoffice — séance note-taking hooks (added): who joined the audio,
+	// //// who left, which room closed. Listeners never throw into the call.
+	private producerCreatedListeners: Array<
+		(roomId: string, peerId: string, producer: mediasoup.types.Producer) => void
+	> = [];
+	private peerRemovedListeners: Array<
+		(roomId: string, peerId: string) => void
+	> = [];
+	private roomClosedListeners: Array<(roomId: string) => void> = [];
 
 	constructor() {
 		this.producerManager.on(
@@ -124,6 +135,41 @@ export class MediasoupManager {
 		}
 	}
 
+	// //// Neoffice — séance note-taking hooks (added)
+	onProducerCreated(
+		listener: (
+			roomId: string,
+			peerId: string,
+			producer: mediasoup.types.Producer,
+		) => void,
+	): void {
+		this.producerCreatedListeners.push(listener);
+	}
+
+	onPeerRemoved(listener: (roomId: string, peerId: string) => void): void {
+		this.peerRemovedListeners.push(listener);
+	}
+
+	onRoomClosed(listener: (roomId: string) => void): void {
+		this.roomClosedListeners.push(listener);
+	}
+
+	getRouter(roomId: string): mediasoup.types.Router | undefined {
+		return this.roomManager.getRouter(roomId);
+	}
+
+	/** Audio producers of a peer (a shared screen's audio included: callers filter). */
+	getPeerAudioProducers(
+		roomId: string,
+		peerId: string,
+	): mediasoup.types.Producer[] {
+		const peer = this.roomManager.getRoom(roomId)?.peers.get(peerId);
+		if (!peer) return [];
+		return Array.from(peer.producers.values()).filter(
+			(producer) => producer.kind === 'audio' && !producer.closed,
+		);
+	}
+
 	onNetworkQualityUpdate(
 		listener: (
 			roomId: string,
@@ -159,6 +205,17 @@ export class MediasoupManager {
 	}
 
 	async closeRoom(roomId: string): Promise<void> {
+		// //// Neoffice — séance note-taking: close the séance before the router goes
+		for (const listener of this.roomClosedListeners) {
+			try {
+				listener(roomId);
+			} catch (error) {
+				loggers.mediasoupManager.warn(
+					'room-closed listener failed: %s',
+					(error as Error).message,
+				);
+			}
+		}
 		await this.roomManager.closeRoom(roomId);
 	}
 
@@ -183,6 +240,18 @@ export class MediasoupManager {
 	async removePeer(roomId: string, peerId: string): Promise<void> {
 		const room = this.roomManager.getRoom(roomId);
 		if (!room) return;
+
+		// //// Neoffice — séance note-taking: finish the person's track first
+		for (const listener of this.peerRemovedListeners) {
+			try {
+				listener(roomId, peerId);
+			} catch (error) {
+				loggers.mediasoupManager.warn(
+					'peer-removed listener failed: %s',
+					(error as Error).message,
+				);
+			}
+		}
 
 		this.peerManager.removePeer(room, peerId);
 		this.peerScores.delete(peerId);
@@ -299,6 +368,18 @@ export class MediasoupManager {
 		// Add audio producers to the audio level observer for active speaker detection
 		if (kind === 'audio') {
 			room.audioLevelObserver.addProducer({ producerId: result.id });
+		}
+
+		// //// Neoffice — séance note-taking: tell the listeners (never throws)
+		for (const listener of this.producerCreatedListeners) {
+			try {
+				listener(roomId, peerId, producer);
+			} catch (error) {
+				loggers.mediasoupManager.warn(
+					'producer-created listener failed: %s',
+					(error as Error).message,
+				);
+			}
 		}
 
 		return result;

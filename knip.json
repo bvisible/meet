@@ -24,7 +24,7 @@
       "ignoreUnresolved": ["~icons/lucide/*"]
     },
     "sfu-server": {
-      "entry": "src/server.ts",
+      "entry": ["src/server.ts", "src/**/__tests__/**/*.test.ts"],
       "project": ["src/**/*.ts", "!src/server.ts"]
     }
   }

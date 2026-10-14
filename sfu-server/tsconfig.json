@@ -19,5 +19,5 @@
 		"moduleResolution": "node"
 	},
 	"include": ["src/**/*", "../types/index.ts"],
-	"exclude": ["node_modules", "dist", "scripts"]
+	"exclude": ["node_modules", "dist", "dist-test", "scripts", "src/**/__tests__/**"]
 }

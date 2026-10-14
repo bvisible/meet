@@ -2,11 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Application, Request, Response } from 'express';
 import type { MediasoupManager } from '../mediasoup/MediasoupManager';
+import { registerSeanceRoutes } from '../seance/routes';
+import type { SeanceManager } from '../seance/SeanceManager';
 import type { HealthStats } from '../types';
 
 export class RouteManager {
 	private app: Application;
 	private mediasoup: MediasoupManager;
+	// //// Neoffice — séance note-taking (optional)
+	private seance: SeanceManager | null;
 
 	private static version: string = RouteManager.readVersion();
 
@@ -21,9 +25,14 @@ export class RouteManager {
 		}
 	}
 
-	constructor(app: Application, mediasoup: MediasoupManager) {
+	constructor(
+		app: Application,
+		mediasoup: MediasoupManager,
+		seance: SeanceManager | null = null,
+	) {
 		this.app = app;
 		this.mediasoup = mediasoup;
+		this.seance = seance;
 	}
 
 	setupRoutes(): void {
@@ -41,8 +50,13 @@ export class RouteManager {
 				uptime: process.uptime(),
 				rooms: this.mediasoup.rooms.getRoomCount(),
 				peers: this.mediasoup.peers.getPeerCount(),
+				// //// Neoffice — capability announcement for the instances
+				features: { seance: this.seance?.enabled === true },
 			};
 			res.json(stats);
 		});
+
+		// //// Neoffice — séance note-taking pick-up routes (/seance/*)
+		if (this.seance) registerSeanceRoutes(this.app, this.seance);
 	}
 }

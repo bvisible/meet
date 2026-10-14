@@ -395,6 +395,11 @@ export interface JWTPayload {
 	user_avatar?: string;
 	is_host: boolean;
 	is_cohost?: boolean;
+	// //// Neoffice — two claims the instance's connection token already carries,
+	// //// read by séance note-taking (a guest is flagged; an end-to-end encrypted
+	// //// room cannot be captured).
+	is_guest?: boolean;
+	e2ee_required?: boolean;
 	scope?: SFUScope;
 	session_id?: string;
 	exp?: number;
@@ -413,6 +418,9 @@ export interface HealthStats {
 	uptime: number;
 	rooms: number;
 	peers: number;
+	// //// Neoffice — what this SFU can do beyond a plain call. The instances
+	// //// read it to show (or hide) the séance note-taking button.
+	features?: { seance: boolean };
 }
 
 // Socket.IO module augmentation
@@ -432,6 +440,9 @@ declare module 'socket.io' {
 		tenant?: string;
 		isHost: boolean;
 		isCohost: boolean;
+		// //// Neoffice — séance note-taking (see JWTPayload)
+		isGuest?: boolean;
+		e2eeRequired?: boolean;
 		roomId?: string;
 		participantId?: string;
 		currentToken?: string;

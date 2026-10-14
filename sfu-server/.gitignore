@@ -121,6 +121,7 @@ temp/
 Dockerfile.dev
 
 dist/
+dist-test/
 
 *.tsbuildinfo
 

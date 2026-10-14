@@ -88,6 +88,10 @@ export class AuthManager {
 				: decoded.meeting_id;
 			socket.isHost = decoded.is_host || false;
 			socket.isCohost = decoded.is_cohost || false;
+			// //// Neoffice — séance note-taking: claims the instance's token
+			// //// already carries (never minted or changed by the SFU).
+			socket.isGuest = decoded.is_guest === true;
+			socket.e2eeRequired = decoded.e2ee_required === true;
 			socket.scope = decoded.scope || 'presence-preview';
 			socket.currentToken = token;
 			socket.tokenExpiresAt = decoded.exp ? decoded.exp * 1000 : undefined;

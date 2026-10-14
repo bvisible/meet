@@ -86,4 +86,6 @@ export const loggers = {
 	authManager: new Logger('AuthManager', defaultLevel),
 	server: new Logger('Server', defaultLevel),
 	config: new Logger('Config', defaultLevel),
+	// //// Neoffice — séance note-taking (added logger)
+	seance: new Logger('Seance', defaultLevel),
 } as const;

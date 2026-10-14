@@ -9,6 +9,8 @@
 		"dev": "ts-node src/server.ts",
 		"dev:watch": "nodemon",
 		"spawn-fake": "node scripts/spawn-fake-users.js",
+		"seance-smoke": "node scripts/seance-smoke.js",
+		"test": "rm -rf dist-test && tsc -p tsconfig.test.json && node --test --test-force-exit dist-test/sfu-server/src/seance/__tests__/*.test.js",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"format": "biome format .",

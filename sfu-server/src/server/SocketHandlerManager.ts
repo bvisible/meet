@@ -1,5 +1,7 @@
 import type { Server, Socket } from 'socket.io';
 import type { MediasoupManager } from '../mediasoup/MediasoupManager';
+import type { SeanceManager } from '../seance/SeanceManager';
+import { registerSeanceSocketHandlers } from '../seance/socketHandlers';
 import type {
 	ChatMessage,
 	ClientToServerEvents,
@@ -30,16 +32,24 @@ export class SocketHandlerManager {
 	private fullAccessSockets: Map<string, Set<string>> = new Map(); // roomId -> Set<socketId>
 	private previewSockets: Map<string, Set<string>> = new Map(); // roomId -> Set<socketId>
 	private hostOnlyChat: Record<string, boolean> = {};
+	// //// Neoffice — séance note-taking (optional: absent = feature not wired)
+	private seance: SeanceManager | null;
 
 	constructor(
 		io: Server<ClientToServerEvents, ServerToClientEvents>,
 		mediasoup: MediasoupManager,
 		authManager: AuthManager,
+		seance: SeanceManager | null = null,
 	) {
 		this.io = io;
 		this.mediasoup = mediasoup;
 		this.authManager = authManager;
 		this.rateLimiter = new RateLimiter();
+		this.seance = seance;
+		this.seance?.setNotifier({
+			emitToRoom: (roomId, event, payload) =>
+				this.emitToFullAccessParticipants(roomId, event, payload),
+		});
 
 		this.mediasoup.onNetworkQualityUpdate((roomId, peerId, quality) => {
 			this.emitToFullAccessParticipants(roomId, 'network_quality_update', {
@@ -249,6 +259,9 @@ export class SocketHandlerManager {
 			this.setupRaiseHandHandlers(socket);
 			this.setupDisconnectHandlers(socket);
 			this.setupErrorHandlers(socket);
+			// //// Neoffice — séance note-taking events (inert unless a client
+			// //// sends `seance:*`, answers `seance_unavailable` when switched off)
+			if (this.seance) registerSeanceSocketHandlers(socket, this.seance);
 		});
 	}
 

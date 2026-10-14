@@ -4,6 +4,10 @@ import cors from 'cors';
 import express, { type Application } from 'express';
 import { Server } from 'socket.io';
 import { MediasoupManager } from './mediasoup/MediasoupManager';
+// //// Neoffice — séance note-taking
+import { loadSeanceConfig } from './seance/config';
+import { mediaFacadeOf } from './seance/mediaAdapter';
+import { SeanceManager } from './seance/SeanceManager';
 import { AuthManager } from './server/AuthManager';
 import { RouteManager } from './server/RouteManager';
 import { SocketHandlerManager } from './server/SocketHandlerManager';
@@ -18,6 +22,7 @@ export class SFUServer {
 	private authManager: AuthManager;
 	private routeManager: RouteManager;
 	private socketHandlerManager: SocketHandlerManager;
+	private seanceManager: SeanceManager;
 	private config: ServerConfig;
 
 	constructor() {
@@ -54,11 +59,23 @@ export class SFUServer {
 
 		this.mediasoup = new MediasoupManager();
 		this.authManager = new AuthManager(this.config.jwtSecret);
-		this.routeManager = new RouteManager(this.app, this.mediasoup);
+		// //// Neoffice — séance note-taking: idle until a host starts one; switched
+		// //// off with SEANCE_TAP=0; never able to take a call down (see SeanceManager).
+		this.seanceManager = new SeanceManager({
+			config: loadSeanceConfig(),
+			secret: this.config.jwtSecret,
+			media: mediaFacadeOf(this.mediasoup),
+		});
+		this.routeManager = new RouteManager(
+			this.app,
+			this.mediasoup,
+			this.seanceManager,
+		);
 		this.socketHandlerManager = new SocketHandlerManager(
 			this.io,
 			this.mediasoup,
 			this.authManager,
+			this.seanceManager,
 		);
 
 		this.setupMiddleware();
@@ -97,6 +114,9 @@ export class SFUServer {
 		loggers.server.info('Stopping SFU Server');
 
 		try {
+			// //// Neoffice — séance note-taking: close the séances so that no
+			// //// chunk of audio is lost to a restart
+			this.seanceManager.shutdown();
 			await this.mediasoup.cleanup();
 
 			this.server.close(() => {
