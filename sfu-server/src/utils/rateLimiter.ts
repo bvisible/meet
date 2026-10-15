@@ -1,3 +1,11 @@
+// //// Neoffice — the limits of `get_room_participants` (maintenance#1597). They were 10 a minute per person AND 10 a
+// //// minute per ADDRESS: people who share an address (an office, a home) join a call within the same minute, five of
+// //// them went over the address's ten and were cut off and reconnected in a loop. A person stays held to ten; the
+// //// address is held to what twelve people can ask.
+export const PARTICIPANTS_LIMIT_PER_USER = 10;
+export const PARTICIPANTS_LIMIT_PER_ADDRESS = 120;
+export const PARTICIPANTS_LIMIT_WINDOW_MS = 60 * 1000;
+
 interface RateLimitEntry {
 	count: number;
 	resetTime: number;

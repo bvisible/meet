@@ -13,7 +13,13 @@ import type {
 	UserData,
 } from '../types';
 import { loggers } from '../utils/logger';
-import { RateLimiter } from '../utils/rateLimiter';
+// //// Neoffice — the limits of the list of participants have names (#1597)
+import {
+	PARTICIPANTS_LIMIT_PER_ADDRESS,
+	PARTICIPANTS_LIMIT_PER_USER,
+	PARTICIPANTS_LIMIT_WINDOW_MS,
+	RateLimiter,
+} from '../utils/rateLimiter';
 import type { AuthManager } from './AuthManager';
 
 type TypedSocket = Socket<
@@ -387,7 +393,15 @@ export class SocketHandlerManager {
 			try {
 				this.authManager.ensurePresenceAccess(socket);
 
-				if (!this.checkSocketRateLimits(socket, 10, 10, 60 * 1000)) {
+				// //// Neoffice — limits named in utils/rateLimiter.ts: the address's was 10, which cut off an office (#1597)
+				if (
+					!this.checkSocketRateLimits(
+						socket,
+						PARTICIPANTS_LIMIT_PER_USER,
+						PARTICIPANTS_LIMIT_PER_ADDRESS,
+						PARTICIPANTS_LIMIT_WINDOW_MS,
+					)
+				) {
 					callback({
 						success: false,
 						error: 'Too many requests. Please try again later.',
