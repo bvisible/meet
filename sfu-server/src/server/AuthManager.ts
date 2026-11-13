@@ -3,6 +3,9 @@ import type { Socket } from 'socket.io';
 import type { JWTPayload } from '../types';
 import { loggers } from '../utils/logger';
 import { PreviewSessionManager } from '../utils/previewSessionManager';
+// //// Neoffice — every token is verified with the secret of the tenant it claims, not the one secret the whole
+// //// fleet held (neoffice-maintenance#1101). Upstream verifies with JWT_SECRET; see ../utils/tenantSecret.ts.
+import { verifyTenantToken } from '../utils/tenantSecret';
 
 export class AuthManager {
 	private jwtSecret: string;
@@ -22,7 +25,7 @@ export class AuthManager {
 				return false;
 			}
 
-			const decoded = jwt.verify(token, this.jwtSecret) as JWTPayload;
+			const decoded = verifyTenantToken<JWTPayload>(token, this.jwtSecret);
 
 			if (decoded.scope === 'presence-preview' && decoded.session_id) {
 				const clientIp = socket.handshake.address || 'unknown';
@@ -123,15 +126,12 @@ export class AuthManager {
 	}
 
 	updateSocketToken(socket: Socket, token: string): void {
-		const decoded = jwt.verify(token, this.jwtSecret) as JWTPayload;
+		const decoded = verifyTenantToken<JWTPayload>(token, this.jwtSecret);
 
 		// Raw meeting_id + tenant must both match what was attached at
 		// initial authentication. A refresh token from another tenant
 		// with the same meeting_id is rejected here.
-		if (
-			!decoded.meeting_id ||
-			decoded.meeting_id !== socket.rawMeetingId
-		) {
+		if (!decoded.meeting_id || decoded.meeting_id !== socket.rawMeetingId) {
 			throw new Error('Token meeting mismatch');
 		}
 
@@ -252,7 +252,7 @@ export class AuthManager {
 		}
 
 		try {
-			const decoded = jwt.verify(token, this.jwtSecret) as JWTPayload;
+			const decoded = verifyTenantToken<JWTPayload>(token, this.jwtSecret);
 			if (decoded.meeting_id !== socket.rawMeetingId) {
 				loggers.authManager.warn(
 					'Meeting ID mismatch for user %s: token has %s, socket has %s',

@@ -10,7 +10,8 @@
 //   - a connection token without `scope` would be read as `presence-preview`,
 //     which cannot start or answer anything.
 
-import * as jwt from 'jsonwebtoken';
+import type * as jwt from 'jsonwebtoken';
+import { verifyTenantToken } from '../utils/tenantSecret';
 
 export const SEANCE_AUDIENCE = 'neoffice-seance';
 const SEANCE_SCOPE = 'seance';
@@ -75,12 +76,13 @@ function verify(token: unknown, secret: string, type: string): jwt.JwtPayload {
 
 	let decoded: jwt.Jwt;
 	try {
-		decoded = jwt.verify(token, secret, {
+		// //// Neoffice — the secret of the tenant the token claims (neoffice-maintenance#1101).
+		decoded = verifyTenantToken<jwt.Jwt>(token, secret, {
 			algorithms: ['HS256'],
 			audience: SEANCE_AUDIENCE,
 			complete: true,
 			clockTolerance: CLOCK_TOLERANCE_SECONDS,
-		}) as jwt.Jwt;
+		});
 	} catch (error) {
 		throw new SeanceError('token_invalid', (error as Error).message);
 	}
